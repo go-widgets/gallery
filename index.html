@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>go-widgets gallery — live wasm demo</title>
+<meta name="description" content="Live wasm demo of the go-widgets/toolkit widget set — every widget family rendered into a browser canvas.">
+<style>
+  html, body { margin: 0; background: #0b0d12; color: #e6e8f0; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 20px; text-align: center; }
+  h1 { font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 6px; }
+  .tagline { color: #9aa0b4; margin: 0 0 22px; }
+  #screen { display: block; margin: 0 auto; background: #ffffff; border: 1px solid #262c40; border-radius: 12px; max-width: 100%; height: auto; cursor: pointer; box-shadow: 0 12px 40px rgba(20,184,166,.15); }
+  .hint { color: #9aa0b4; font-size: .9rem; margin: 14px 0 24px; }
+  #err { color: #ff5f57; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; white-space: pre-wrap; }
+  a { color: #14b8a6; }
+  footer { color: #9aa0b4; text-align: center; padding: 14px 0 40px; font-size: .85rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>go-widgets gallery</h1>
+    <p class="tagline">Live wasm demo of <a href="https://github.com/go-widgets/toolkit">go-widgets/toolkit</a>.</p>
+    <canvas id="screen" width="720" height="480"></canvas>
+    <p class="hint">Click a menu name (File / Edit / View / Help) to open its popover · a Toolbar icon or a Notebook tab to switch families. Toasts show which action fired.</p>
+    <div id="err"></div>
+    <p><a href="https://github.com/go-widgets">go-widgets</a> · <a href="https://github.com/go-widgets/gallery">source</a></p>
+  </div>
+  <footer>BSD-3-Clause · pure Go · CGO=0</footer>
+  <script src="wasm_exec.js"></script>
+  <script>
+    (async () => {
+      try {
+        const go = new Go();
+        const res = await WebAssembly.instantiateStreaming(fetch("gallery.wasm"), go.importObject);
+        go.run(res.instance);
+      } catch (e) {
+        document.getElementById("err").textContent = "failed to boot the wasm: " + (e && e.message ? e.message : e);
+      }
+    })();
+  </script>
+</body>
+</html>

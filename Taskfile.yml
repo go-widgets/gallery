@@ -1,0 +1,37 @@
+version: "3"
+
+env:
+  CGO_ENABLED: "0"
+  GOWORK: "off"
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - task -l
+
+  build:
+    desc: Build gallery.wasm + copy the matching wasm_exec.js from GOROOT
+    env:
+      GOOS: js
+      GOARCH: wasm
+    cmds:
+      - go build -o gallery.wasm .
+      - |
+        root="$(go env GOROOT)"
+        if [ -f "$root/lib/wasm/wasm_exec.js" ]; then
+          cp "$root/lib/wasm/wasm_exec.js" ./wasm_exec.js
+        else
+          cp "$root/misc/wasm/wasm_exec.js" ./wasm_exec.js
+        fi
+
+  serve:
+    desc: Build + serve the gallery on http://localhost:8090/ (no COOP/COEP needed — no SAB)
+    deps: [build]
+    cmds:
+      - python3 -m http.server 8090
+
+  clean:
+    desc: Remove build artefacts
+    cmds:
+      - rm -f gallery.wasm wasm_exec.js
