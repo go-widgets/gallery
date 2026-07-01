@@ -1,0 +1,57 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          check-latest: true
+          cache: true
+
+      - name: Build gallery.wasm
+        env:
+          GOOS: js
+          GOARCH: wasm
+          GOWORK: "off"
+          CGO_ENABLED: "0"
+        run: go build -o gallery.wasm .
+
+      - name: Copy wasm_exec.js from GOROOT
+        run: |
+          root="$(go env GOROOT)"
+          if [ -f "$root/lib/wasm/wasm_exec.js" ]; then
+            cp "$root/lib/wasm/wasm_exec.js" ./wasm_exec.js
+          else
+            cp "$root/misc/wasm/wasm_exec.js" ./wasm_exec.js
+          fi
+
+      - name: Stage site
+        run: |
+          mkdir -p site
+          cp index.html gallery.wasm wasm_exec.js site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+      - uses: actions/deploy-pages@v4
