@@ -18,11 +18,6 @@ import (
 	"syscall/js"
 )
 
-const (
-	surfaceW = 720
-	surfaceH = 480
-)
-
 func main() {
 	doc := js.Global().Get("document")
 	canvas := doc.Call("getElementById", "screen")
