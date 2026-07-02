@@ -102,8 +102,12 @@ func newState(w, h int) *state {
 
 	// --- top scaffold -----------------------------------------------------
 
+	// Notification hosts a floating toast at bottom-right, just above
+	// the Statusbar. Anchored bottom-right (not top-right) so it never
+	// collides with the ListBox / TreeView headers at the top of
+	// column C when it's visible.
 	s.notify = toolkit.NewNotification("")
-	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: toolkit.MenuBarH + toolkit.ToolbarButtonH + 12, W: 260, H: 24})
+	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
 	menu := func(label string) toolkit.MenuItem {
 		return toolkit.MenuItem{Label: label, Action: func() { s.notify.Show("clicked: " + label) }}
