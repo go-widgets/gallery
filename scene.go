@@ -95,7 +95,16 @@ type state struct {
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
 	clickables []toolkit.Widget
+
+	// Card outlines painted underneath the widgets. Each rect covers
+	// one section — the GTK4 widget-factory pattern of a bordered
+	// group. Recorded during layout in newState, stroked in draw().
+	cards []toolkit.Rect
 }
+
+// cardPad is the extra pixels a card extends past its inner-most
+// widget rect on every side. Kept small so cards feel tight.
+const cardPad = 6
 
 func newState(w, h int) *state {
 	s := &state{w: w, h: h, theme: toolkit.DefaultLight()}
@@ -141,6 +150,7 @@ func newState(w, h int) *state {
 	// --- Column A: Actions & Inputs & Feedback ---------------------------
 
 	y := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	cardStart := y
 
 	s.actionsLabel = toolkit.NewLabel("Actions")
 	s.actionsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
@@ -176,7 +186,9 @@ func newState(w, h int) *state {
 		y += 20 + sectGap/2
 	}
 	s.radios[0].Checked = true
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
 	y += sectPad
+	cardStart = y
 
 	s.inputsLabel = toolkit.NewLabel("Inputs")
 	s.inputsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
@@ -194,7 +206,10 @@ func newState(w, h int) *state {
 
 	s.dropdown = toolkit.NewDropDown([]string{"UTF-8", "Latin-1", "Shift-JIS"}, 0)
 	s.dropdown.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 26})
-	y += 26 + sectPad
+	y += 26
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+	y += sectPad
+	cardStart = y
 
 	s.feedbackLabel = toolkit.NewLabel("Feedback")
 	s.feedbackLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
@@ -214,7 +229,10 @@ func newState(w, h int) *state {
 	s.spinner = toolkit.NewSpinner()
 	s.spinner.Active = true
 	s.spinner.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 24, H: 24})
-	y += 24 + sectPad
+	y += 24
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+	y += sectPad
+	cardStart = y
 
 	s.notebookLabel = toolkit.NewLabel("Notebook")
 	s.notebookLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
@@ -229,10 +247,13 @@ func newState(w, h int) *state {
 	s.notebook.AddTab("Two", toolkit.NewLabel("Second tab body"))
 	s.notebook.AddTab("Three", toolkit.NewLabel("Third tab body"))
 	s.notebook.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 80})
+	y += 80
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B: Text, Calendar, ColorChooser --------------------------
 
 	yB := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	cardStartB := yB
 
 	s.textLabel = toolkit.NewLabel("TextView")
 	s.textLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
@@ -240,7 +261,10 @@ func newState(w, h int) *state {
 
 	s.textView = toolkit.NewTextView("Multi-line editor.\nType to insert.\nEnter splits a line.\nArrow keys navigate.")
 	s.textView.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 110})
-	yB += 110 + sectPad
+	yB += 110
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+	yB += sectPad
+	cardStartB = yB
 
 	s.calLabel = toolkit.NewLabel("Calendar")
 	s.calLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
@@ -249,7 +273,10 @@ func newState(w, h int) *state {
 	s.calendar = toolkit.NewCalendar(2026, 7, 2)
 	s.calendar.SetToday(2026, 7, 2)
 	s.calendar.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 180})
-	yB += 180 + sectPad
+	yB += 180
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+	yB += sectPad
+	cardStartB = yB
 
 	s.colorLabel = toolkit.NewLabel("ColorChooser")
 	s.colorLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
@@ -257,10 +284,13 @@ func newState(w, h int) *state {
 
 	s.colorChoose = toolkit.NewColorChooser(toolkit.RGB(0x0d, 0x94, 0x88))
 	s.colorChoose.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 130})
+	yB += 130
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C: Selection & Structure ---------------------------------
 
 	yC := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	cardStartC := yC
 
 	s.listLabel = toolkit.NewLabel("ListBox")
 	s.listLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
@@ -268,7 +298,10 @@ func newState(w, h int) *state {
 
 	s.listBox = toolkit.NewListBox([]string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"})
 	s.listBox.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 130})
-	yC += 130 + sectPad
+	yC += 130
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+	yC += sectPad
+	cardStartC = yC
 
 	s.treeLabel = toolkit.NewLabel("TreeView")
 	s.treeLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
@@ -284,7 +317,10 @@ func newState(w, h int) *state {
 		},
 	})
 	s.tree.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 190})
-	yC += 190 + sectPad
+	yC += 190
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+	yC += sectPad
+	cardStartC = yC
 
 	s.expLabel = toolkit.NewLabel("Expander + Frame")
 	s.expLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
@@ -298,7 +334,10 @@ func newState(w, h int) *state {
 	s.expander = toolkit.NewExpander("Details", s.frameHost)
 	s.expander.Expanded = true
 	s.expander.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 88})
-	yC += 88 + sectPad
+	yC += 88
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+	yC += sectPad
+	cardStartC = yC
 
 	s.panedLabel = toolkit.NewLabel("Paned (horizontal split)")
 	s.panedLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
@@ -308,6 +347,8 @@ func newState(w, h int) *state {
 	// centres the handle on first sizing, so no manual Position is needed.
 	s.paned = toolkit.NewHPaned(toolkit.NewLabel("left pane"), toolkit.NewLabel("right pane"))
 	s.paned.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 60})
+	yC += 60
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- click routing table --------------------------------------------
 
@@ -329,14 +370,34 @@ func newState(w, h int) *state {
 	return s
 }
 
+// pushCard records the outer rectangle of a section — extended by
+// cardPad on every side so the border sits comfortably around the
+// widgets. draw() strokes these before painting widgets so the
+// widget bodies land on top of the border.
+func (s *state) pushCard(x, y, w, h int) {
+	s.cards = append(s.cards, toolkit.Rect{
+		X: x - cardPad, Y: y - cardPad,
+		W: w + 2*cardPad, H: h + 2*cardPad,
+	})
+}
+
 // draw paints the whole dashboard onto buf. Buf is an RGBA row-major
 // slice — buf and s.w/s.h are wrapped in a PixelPainter so the widget
 // code sees only the painter.Painter interface. Draw order matters:
-// background first, then row scaffolding, then widget cards, then
-// overlays (menu popover + notification) on top.
+// background first, card outlines behind the widgets, then row
+// scaffolding, then widget cards, then overlays (menu popover +
+// notification) on top.
 func (s *state) draw(buf []byte) {
 	fillBG(buf, s.w, s.h, s.theme.Background)
 	p := painter.NewPixelPainter(buf, s.w, s.h)
+
+	// Card outlines — a subtle 1-px Border stroke around each widget
+	// group (GTK4 widget-factory pattern). Painted before the widgets
+	// so widget bodies overlap the border on top.
+	for _, r := range s.cards {
+		p.FillRect(painter.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, s.theme.Surface)
+		p.StrokeRect(painter.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, s.theme.Border, 1)
+	}
 
 	// Top scaffold.
 	s.menuBar.Draw(p, s.theme)
