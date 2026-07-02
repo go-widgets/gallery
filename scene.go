@@ -6,6 +6,7 @@
 package main
 
 import (
+	"github.com/go-widgets/painter"
 	"github.com/go-widgets/toolkit"
 )
 
@@ -142,24 +143,27 @@ func newState(w, h int) *state {
 	return s
 }
 
-// draw paints everything in draw-order onto buf.
+// draw paints everything in draw-order onto buf. Buf is an RGBA
+// row-major slice — buf and s.w/s.h are wrapped in a PixelPainter
+// so the widget code sees only the painter.Painter interface.
 func (s *state) draw(buf []byte) {
 	fillBG(buf, s.w, s.h, s.theme.Background)
-	s.menuBar.Draw(buf, s.w, s.theme)
-	s.toolbar.Draw(buf, s.w, s.theme)
-	s.notebook.Draw(buf, s.w, s.theme)
+	p := painter.NewPixelPainter(buf, s.w, s.h)
+	s.menuBar.Draw(p, s.theme)
+	s.toolbar.Draw(p, s.theme)
+	s.notebook.Draw(p, s.theme)
 	switch s.notebook.Active {
 	case 0:
-		s.check.Draw(buf, s.w, s.theme)
-		s.dropdown.Draw(buf, s.w, s.theme)
+		s.check.Draw(p, s.theme)
+		s.dropdown.Draw(p, s.theme)
 	case 2:
-		s.listBox.Draw(buf, s.w, s.theme)
+		s.listBox.Draw(p, s.theme)
 	case 3:
-		s.scale.Draw(buf, s.w, s.theme)
+		s.scale.Draw(p, s.theme)
 	case 4:
-		s.calendar.Draw(buf, s.w, s.theme)
+		s.calendar.Draw(p, s.theme)
 	}
-	s.status.Draw(buf, s.w, s.theme)
+	s.status.Draw(p, s.theme)
 	// Menu popovers open when the user clicks a top-level name; paint
 	// them after the status so they land on top.
 	if s.menuBar.Active >= 0 && s.menuBar.Active < len(s.menuBar.Menus) {
@@ -167,9 +171,9 @@ func (s *state) draw(buf []byte) {
 		// Position the popover just below the clicked name.
 		nx := s.menuBar.NameOriginX(s.menuBar.Active)
 		m.SetBounds(toolkit.Rect{X: nx, Y: toolkit.MenuBarH, W: 160, H: 4 + toolkit.MenuRowH*len(m.Items)})
-		m.Draw(buf, s.w, s.theme)
+		m.Draw(p, s.theme)
 	}
-	s.notify.Draw(buf, s.w, s.theme)
+	s.notify.Draw(p, s.theme)
 }
 
 // handleClick dispatches a click at (x, y) to whichever pane it
