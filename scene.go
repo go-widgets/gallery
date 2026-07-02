@@ -9,6 +9,15 @@ import (
 	"github.com/go-widgets/toolkit"
 )
 
+// Fixed canvas dimensions. Lives in scene.go (not main.go) so the
+// native scene_test compiles without the js && wasm build tag —
+// otherwise the constants drop out and the tests can't reference
+// them.
+const (
+	surfaceW = 720
+	surfaceH = 480
+)
+
 type state struct {
 	w, h int
 
