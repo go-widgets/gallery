@@ -82,6 +82,15 @@ type state struct {
 	expander  *toolkit.Expander
 	frameHost *toolkit.Frame
 
+	// Container demos to fill the vertical whitespace + demonstrate
+	// composition (a leaf-only widget dashboard would leave 30 % of
+	// each column empty).
+	notebookLabel *toolkit.Label
+	notebook      *toolkit.Notebook
+
+	panedLabel *toolkit.Label
+	paned      *toolkit.Paned
+
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
@@ -122,7 +131,7 @@ func newState(w, h int) *state {
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"24 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.6"})
+	s.status = toolkit.NewStatusbar([]string{"25 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.6"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Column A: Actions & Inputs & Feedback ---------------------------
@@ -201,6 +210,21 @@ func newState(w, h int) *state {
 	s.spinner = toolkit.NewSpinner()
 	s.spinner.Active = true
 	s.spinner.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 24, H: 24})
+	y += 24 + sectPad
+
+	s.notebookLabel = toolkit.NewLabel("Notebook")
+	s.notebookLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
+	y += toolkit.GlyphHeight + sectGap
+
+	// Notebook demo: three tabs each hosting a Label. Notebook.Draw
+	// re-sizes its active page to fill the body, which is exactly what
+	// we want here — a Label with tight bounds inherits the body's
+	// full width.
+	s.notebook = toolkit.NewNotebook()
+	s.notebook.AddTab("One", toolkit.NewLabel("First tab body"))
+	s.notebook.AddTab("Two", toolkit.NewLabel("Second tab body"))
+	s.notebook.AddTab("Three", toolkit.NewLabel("Third tab body"))
+	s.notebook.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 80})
 
 	// --- Column B: Text, Calendar, ColorChooser --------------------------
 
@@ -270,6 +294,16 @@ func newState(w, h int) *state {
 	s.expander = toolkit.NewExpander("Details", s.frameHost)
 	s.expander.Expanded = true
 	s.expander.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 88})
+	yC += 88 + sectPad
+
+	s.panedLabel = toolkit.NewLabel("Paned (horizontal split)")
+	s.panedLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
+	yC += toolkit.GlyphHeight + sectGap
+
+	// Paned demo: horizontal split hosting two Labels. Paned.SetBounds
+	// centres the handle on first sizing, so no manual Position is needed.
+	s.paned = toolkit.NewHPaned(toolkit.NewLabel("left pane"), toolkit.NewLabel("right pane"))
+	s.paned.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 60})
 
 	// --- click routing table --------------------------------------------
 
@@ -278,12 +312,14 @@ func newState(w, h int) *state {
 		s.button, s.toggle, s.check,
 		s.radios[0], s.radios[1], s.radios[2],
 		s.entry, s.spin, s.scale, s.dropdown,
+		s.notebook,
 		s.textView,
 		s.calendar,
 		s.colorChoose,
 		s.listBox,
 		s.tree,
 		s.expander,
+		s.paned,
 	}
 
 	return s
@@ -319,6 +355,8 @@ func (s *state) draw(buf []byte) {
 	s.progress.Draw(p, s.theme)
 	s.level.Draw(p, s.theme)
 	s.spinner.Draw(p, s.theme)
+	s.notebookLabel.Draw(p, s.theme)
+	s.notebook.Draw(p, s.theme)
 
 	// Column B — Text & Time.
 	s.textLabel.Draw(p, s.theme)
@@ -335,6 +373,8 @@ func (s *state) draw(buf []byte) {
 	s.tree.Draw(p, s.theme)
 	s.expLabel.Draw(p, s.theme)
 	s.expander.Draw(p, s.theme)
+	s.panedLabel.Draw(p, s.theme)
+	s.paned.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
