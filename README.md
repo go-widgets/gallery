@@ -1,5 +1,11 @@
 # go-widgets/gallery
 
+[![CI](https://github.com/go-widgets/gallery/actions/workflows/ci.yml/badge.svg)](https://github.com/go-widgets/gallery/actions/workflows/ci.yml)
+[![pages](https://github.com/go-widgets/gallery/actions/workflows/pages.yml/badge.svg)](https://github.com/go-widgets/gallery/actions/workflows/pages.yml)
+[![live demo](https://img.shields.io/badge/live-demo-14b8a6)](https://go-widgets.github.io/gallery/)
+![coverage](https://img.shields.io/badge/coverage-100%25-1a7f37)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
+
 Live wasm demo of [go-widgets/toolkit](https://github.com/go-widgets/toolkit).
 
 Deploys to <https://go-widgets.github.io/gallery/> on every push to
@@ -7,7 +13,7 @@ Deploys to <https://go-widgets.github.io/gallery/> on every push to
 
 ## Local dev
 
-```
+```text
 pkgx task build   # compiles gallery.wasm + copies wasm_exec.js
 pkgx task serve   # http://localhost:8090/
 ```
