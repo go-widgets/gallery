@@ -1,3 +1,4 @@
-/gallery.wasm
-/wasm_exec.js
-/site/
+gallery
+gallery.wasm
+wasm_exec.js
+
