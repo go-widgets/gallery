@@ -8,6 +8,11 @@
 package main
 
 import (
+	"image"
+	"image/color"
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-widgets/toolkit"
@@ -72,6 +77,87 @@ func TestDrawPaintsInto(t *testing.T) {
 			t.Fatalf("draw left alpha 0 at byte %d — background fill missing", i)
 		}
 	}
+}
+
+// TestDrawDumpsEveryThemeToPNG renders the scene under every theme
+// exposed by the theme switcher and PNG-encodes each to a dedicated
+// file. Serves two purposes:
+//
+//   - **Correctness signal**: each PNG must have a distinct pixel
+//     signature (bg color, ink color, accent color differ between
+//     themes), so an "OnChange doesn't actually swap the theme"
+//     regression would trip the signature comparison.
+//   - **Visual verification hook**: when the environment variable
+//     GALLERY_DUMP_PNG is set to a directory, the PNGs land there
+//     instead of a temporary directory the test cleans up. That's
+//     the seam a developer uses to inspect the render outside CI.
+//
+// Runs unconditionally on CI so coverage stays honest — every
+// statement inside the dump path is exercised on every run.
+func TestDrawDumpsEveryThemeToPNG(t *testing.T) {
+	dir := os.Getenv("GALLERY_DUMP_PNG")
+	if dir == "" {
+		dir = t.TempDir()
+	} else if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir dump dir: %v", err)
+	}
+	s := newState(surfaceW, surfaceH)
+	signatures := make(map[string]bool, len(s.themeNames))
+	for i, name := range s.themeNames {
+		// Mirror what ViewSwitcher's own OnEvent does on a click:
+		// updates Current then fires OnChange. Direct OnChange calls
+		// would leave the visual "selected" state stuck on 0.
+		s.themeSwitcher.Current = i
+		s.themeSwitcher.OnChange(i)
+		surf := newSurface()
+		s.draw(surf)
+		path := filepath.Join(dir, "scene-"+name+".png")
+		if err := encodeSurfaceAsPNG(surf, path); err != nil {
+			t.Fatalf("encode %s: %v", path, err)
+		}
+		sig := surfaceSignature(surf)
+		if signatures[sig] {
+			t.Fatalf("theme %q produced the same pixel signature as an earlier theme — OnChange likely did not swap the palette", name)
+		}
+		signatures[sig] = true
+	}
+}
+
+// encodeSurfaceAsPNG writes the RGBA byte buffer to path as a PNG.
+func encodeSurfaceAsPNG(surf []byte, path string) error {
+	img := image.NewRGBA(image.Rect(0, 0, surfaceW, surfaceH))
+	for y := 0; y < surfaceH; y++ {
+		for x := 0; x < surfaceW; x++ {
+			i := 4 * (y*surfaceW + x)
+			img.Set(x, y, color.RGBA{surf[i], surf[i+1], surf[i+2], surf[i+3]})
+		}
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, img)
+}
+
+// surfaceSignature reduces the RGBA buffer to a short, theme-
+// distinguishing string by sampling a handful of representative
+// pixels. Samples the top-left (background), the toolbar strip
+// (surface), and the accent-heavy Wave-3 ProgressCircle area
+// (accent). Two different palettes MUST hit distinct color triples
+// on at least one of those samples.
+func surfaceSignature(surf []byte) string {
+	samples := []struct{ x, y int }{
+		{4, 4},                      // background
+		{surfaceW / 2, 30},          // toolbar
+		{surfaceW - 40, surfaceH/2}, // wave-3 accent zone
+	}
+	var buf [3 * 4]byte
+	for i, p := range samples {
+		off := 4 * (p.y*surfaceW + p.x)
+		copy(buf[i*4:i*4+4], surf[off:off+4])
+	}
+	return string(buf[:])
 }
 
 func TestDrawWithOpenMenuPopover(t *testing.T) {
@@ -305,6 +391,18 @@ func TestAllWaveCallbacks(t *testing.T) {
 	s.splitButton.OnArrow()
 	if s.notify.Text == "" {
 		t.Fatal("SplitButton OnArrow did not show notify")
+	}
+
+	// Theme switcher — every segment installs its palette and fires notify.
+	for i, name := range s.themeNames {
+		s.notify.Text = ""
+		s.themeSwitcher.OnChange(i)
+		if s.theme != s.themes[i] {
+			t.Fatalf("themeSwitcher OnChange(%d) did not swap s.theme to %q", i, name)
+		}
+		if s.notify.Text == "" {
+			t.Fatalf("themeSwitcher OnChange(%d) did not show notify for %q", i, name)
+		}
 	}
 }
 

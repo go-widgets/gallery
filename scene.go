@@ -20,8 +20,13 @@ import (
 // labelled slot rather than being hidden behind a Notebook tab.
 const (
 	surfaceW = 960
-	surfaceH = 980
+	surfaceH = 1016
 )
+
+// themeRowH sizes the ViewSwitcher strip sitting between the Toolbar
+// and the column grid. Keep the strip roomy enough that the segment
+// labels don't clip on the 5×7 bitmap font.
+const themeRowH = 26
 
 // Column geometry. Three columns of equal width with an 8px outer
 // margin + 8px gutter.
@@ -113,6 +118,15 @@ type state struct {
 	progressCircle *toolkit.ProgressCircle
 	splitButton    *toolkit.SplitButton
 
+	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
+	// Each segment installs a distinct palette so the whole scene
+	// repaints on click — validates that the toolkit's Theme value
+	// cascades through every widget uniformly, and demonstrates
+	// LoadGTKTheme on the "Adwaita" entries.
+	themeSwitcher *toolkit.ViewSwitcher
+	themes        []*toolkit.Theme
+	themeNames    []string
+
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
@@ -162,16 +176,50 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.notify.Show("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.notify.Show("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.6") }},
+		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.9.1") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"25 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.6"})
+	s.status = toolkit.NewStatusbar([]string{"40 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.9.1"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
+
+	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
+	//
+	// Sits between the Toolbar and the column grid. Three palettes:
+	//   * Light   — toolkit.DefaultLight()
+	//   * Dark    — toolkit.DefaultDark()
+	//   * Adwaita — parsed via LoadGTKTheme from an inline libadwaita
+	//     palette (validates the CSS parser end-to-end at run time).
+	adwaita, _ := toolkit.LoadGTKTheme(`
+		@define-color window_bg_color   #fafafa;
+		@define-color window_fg_color   #2e3436;
+		@define-color view_bg_color     #ffffff;
+		@define-color view_fg_color     #2e3436;
+		@define-color card_bg_color     #f6f5f4;
+		@define-color accent_bg_color   #3584e4;
+		@define-color borders           #c0bfbc;
+	`)
+	s.themes = []*toolkit.Theme{
+		toolkit.DefaultLight(),
+		toolkit.DefaultDark(),
+		adwaita,
+	}
+	s.themeNames = []string{"Light", "Dark", "Adwaita"}
+	s.themeSwitcher = toolkit.NewViewSwitcher(s.themeNames, 0)
+	s.themeSwitcher.OnChange = func(i int) {
+		s.theme = s.themes[i]
+		s.notify.Show("Theme: " + s.themeNames[i])
+	}
+	s.themeSwitcher.SetBounds(toolkit.Rect{
+		X: margin,
+		Y: toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad,
+		W: w - 2*margin,
+		H: themeRowH,
+	})
 
 	// --- Column A: Actions & Inputs & Feedback ---------------------------
 
-	y := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	y := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
 	cardStart := y
 
 	s.actionsLabel = toolkit.NewLabel("Actions")
@@ -274,7 +322,7 @@ func newState(w, h int) *state {
 
 	// --- Column B: Text, Calendar, ColorChooser --------------------------
 
-	yB := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	yB := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
 	cardStartB := yB
 
 	s.textLabel = toolkit.NewLabel("TextView")
@@ -311,7 +359,7 @@ func newState(w, h int) *state {
 
 	// --- Column C: Selection & Structure ---------------------------------
 
-	yC := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad
+	yC := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
 	cardStartC := yC
 
 	s.listLabel = toolkit.NewLabel("ListBox")
@@ -479,6 +527,8 @@ func newState(w, h int) *state {
 	// --- click routing table --------------------------------------------
 
 	s.clickables = []toolkit.Widget{
+		// theme switcher first (above the column grid)
+		s.themeSwitcher,
 		// row order matches column-A top-to-bottom, then B, then C
 		s.button, s.toggle, s.check,
 		s.radios[0], s.radios[1], s.radios[2],
@@ -535,6 +585,7 @@ func (s *state) draw(buf []byte) {
 	// Top scaffold.
 	s.menuBar.Draw(p, s.theme)
 	s.toolbar.Draw(p, s.theme)
+	s.themeSwitcher.Draw(p, s.theme)
 
 	// Column A — Actions & Inputs & Feedback.
 	s.actionsLabel.Draw(p, s.theme)
