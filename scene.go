@@ -176,20 +176,25 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.notify.Show("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.notify.Show("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.9.1") }},
+		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.9.2") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"40 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.9.1"})
+	s.status = toolkit.NewStatusbar([]string{"40 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.9.2"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
 	//
-	// Sits between the Toolbar and the column grid. Three palettes:
-	//   * Light   — toolkit.DefaultLight()
-	//   * Dark    — toolkit.DefaultDark()
-	//   * Adwaita — parsed via LoadGTKTheme from an inline libadwaita
+	// Sits between the Toolbar and the column grid. Four palettes:
+	//   * Light    — toolkit.DefaultLight()
+	//   * Dark     — toolkit.DefaultDark()
+	//   * Adwaita  — parsed via LoadGTKTheme from an inline libadwaita
 	//     palette (validates the CSS parser end-to-end at run time).
+	//   * WhiteSur — parsed from the vinceliuice WhiteSur GTK theme's
+	//     light-blue variant colour palette (Big Sur inspired). Source:
+	//     github.com/vinceliuice/WhiteSur-gtk-theme, sass/_colors.scss +
+	//     _colors-palette.scss ($theme_color_default = #0860F2,
+	//     $base_color = #ffffff, $text_color = #363636, ...).
 	adwaita, _ := toolkit.LoadGTKTheme(`
 		@define-color window_bg_color   #fafafa;
 		@define-color window_fg_color   #2e3436;
@@ -199,12 +204,22 @@ func newState(w, h int) *state {
 		@define-color accent_bg_color   #3584e4;
 		@define-color borders           #c0bfbc;
 	`)
+	whiteSur, _ := toolkit.LoadGTKTheme(`
+		@define-color window_bg_color   #f5f5f5;
+		@define-color window_fg_color   #242424;
+		@define-color view_bg_color     #ffffff;
+		@define-color view_fg_color     #363636;
+		@define-color card_bg_color     #ececec;
+		@define-color accent_bg_color   #0860F2;
+		@define-color borders           #d1d1d6;
+	`)
 	s.themes = []*toolkit.Theme{
 		toolkit.DefaultLight(),
 		toolkit.DefaultDark(),
 		adwaita,
+		whiteSur,
 	}
-	s.themeNames = []string{"Light", "Dark", "Adwaita"}
+	s.themeNames = []string{"Light", "Dark", "Adwaita", "WhiteSur"}
 	s.themeSwitcher = toolkit.NewViewSwitcher(s.themeNames, 0)
 	s.themeSwitcher.OnChange = func(i int) {
 		s.theme = s.themes[i]
