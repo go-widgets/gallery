@@ -20,7 +20,7 @@ import (
 // labelled slot rather than being hidden behind a Notebook tab.
 const (
 	surfaceW = 960
-	surfaceH = 720
+	surfaceH = 980
 )
 
 // Column geometry. Three columns of equal width with an 8px outer
@@ -90,6 +90,28 @@ type state struct {
 
 	panedLabel *toolkit.Label
 	paned      *toolkit.Paned
+
+	// Column-A Wave 1 (v0.7) highlights.
+	wave1Label *toolkit.Label
+	swtch      *toolkit.Switch
+	alert      *toolkit.Alert
+	card       *toolkit.Card
+	steps      *toolkit.Steps
+
+	// Column-B Wave 2 (v0.8) highlights.
+	wave2Label *toolkit.Label
+	toast      *toolkit.Toast
+	banner     *toolkit.Banner
+	headerBar  *toolkit.HeaderBar
+	diff       *toolkit.Diff
+
+	// Column-C Wave 3 (v0.9) highlights.
+	wave3Label     *toolkit.Label
+	stat           *toolkit.Stat
+	timeline       *toolkit.Timeline
+	chip           *toolkit.Chip
+	progressCircle *toolkit.ProgressCircle
+	splitButton    *toolkit.SplitButton
 
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
@@ -350,6 +372,110 @@ func newState(w, h int) *state {
 	yC += 60
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
+	// --- Column A extension: Wave 1 (v0.7) highlights -------------------
+
+	y += sectPad
+	cardStart = y
+
+	s.wave1Label = toolkit.NewLabel("Wave 1 (v0.7)")
+	s.wave1Label.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
+	y += toolkit.GlyphHeight + sectGap
+
+	s.swtch = toolkit.NewSwitch(true)
+	s.swtch.OnToggle = func(on bool) {
+		if on {
+			s.notify.Show("Switch: ON")
+		} else {
+			s.notify.Show("Switch: OFF")
+		}
+	}
+	s.swtch.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 44, H: 22})
+	y += 22 + sectGap
+
+	s.alert = toolkit.NewAlert("Saved 3 minutes ago.", toolkit.AlertSuccess)
+	s.alert.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 32})
+	y += 32 + sectGap
+
+	s.card = toolkit.NewCard("Card", "Title above.\nBody here.", "footer note")
+	s.card.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 74})
+	y += 74 + sectGap
+
+	s.steps = toolkit.NewSteps([]string{"Plan", "Build", "Test", "Ship"}, 1)
+	s.steps.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 32})
+	y += 32
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+
+	// --- Column B extension: Wave 2 (v0.8) highlights -------------------
+
+	yB += sectPad
+	cardStartB = yB
+
+	s.wave2Label = toolkit.NewLabel("Wave 2 (v0.8)")
+	s.wave2Label.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
+	yB += toolkit.GlyphHeight + sectGap
+
+	s.headerBar = toolkit.NewHeaderBar("Files")
+	s.headerBar.Subtitle = "~/Documents"
+	s.headerBar.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 36})
+	yB += 36 + sectGap
+
+	s.toast = toolkit.NewToast("Copied to clipboard", toolkit.ToastSuccess)
+	s.toast.Visible = true
+	s.toast.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 24})
+	yB += 24 + sectGap
+
+	s.banner = toolkit.NewBanner("Update available.")
+	s.banner.ButtonLabel = "Install"
+	s.banner.OnAction = func() { s.notify.Show("Banner action clicked") }
+	s.banner.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 24})
+	yB += 24 + sectGap
+
+	s.diff = toolkit.NewDiff([]toolkit.DiffLine{
+		{Text: "package main", Kind: toolkit.DiffContext},
+		{Text: "old line", Kind: toolkit.DiffRemoved},
+		{Text: "new line", Kind: toolkit.DiffAdded},
+	})
+	s.diff.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 54})
+	yB += 54
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+
+	// --- Column C extension: Wave 3 (v0.9) highlights -------------------
+
+	yC += sectPad
+	cardStartC = yC
+
+	s.wave3Label = toolkit.NewLabel("Wave 3 (v0.9)")
+	s.wave3Label.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
+	yC += toolkit.GlyphHeight + sectGap
+
+	s.stat = toolkit.NewStat("Requests / min", "12,845")
+	s.stat.Change = "+8.3%"
+	s.stat.Trend = toolkit.StatUp
+	s.stat.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW/2 - 2, H: 60})
+	s.progressCircle = toolkit.NewProgressCircle()
+	s.progressCircle.Fraction = 0.66
+	s.progressCircle.SetBounds(toolkit.Rect{X: colCX + colW/2 + 2, Y: yC, W: colW/2 - 2, H: 60})
+	yC += 60 + sectGap
+
+	s.timeline = toolkit.NewTimeline([]toolkit.TimelineEvent{
+		{Title: "PR opened", Kind: toolkit.TimelineDefault},
+		{Title: "Reviewed", Detail: "LGTM", Kind: toolkit.TimelineSuccess},
+		{Title: "Build failed", Kind: toolkit.TimelineError},
+	})
+	s.timeline.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 68})
+	yC += 68 + sectGap
+
+	s.chip = toolkit.NewChip("frontend")
+	s.chip.Closable = true
+	s.chip.OnClose = func() { s.notify.Show("Chip closed") }
+	s.chip.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: 96, H: 22})
+	s.splitButton = toolkit.NewSplitButton("Deploy",
+		func() { s.notify.Show("SplitButton: Deploy") })
+	s.splitButton.OnArrow = func() { s.notify.Show("SplitButton: arrow menu") }
+	s.splitButton.SetBounds(toolkit.Rect{X: colCX + 104, Y: yC, W: colW - 104, H: 22})
+	yC += 22
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+
 	// --- click routing table --------------------------------------------
 
 	s.clickables = []toolkit.Widget{
@@ -358,6 +484,9 @@ func newState(w, h int) *state {
 		s.radios[0], s.radios[1], s.radios[2],
 		s.entry, s.spin, s.scale, s.dropdown,
 		s.notebook,
+		// Column A wave extension
+		s.swtch,
+		// Column B & C classic
 		s.textView,
 		s.calendar,
 		s.colorChoose,
@@ -365,6 +494,10 @@ func newState(w, h int) *state {
 		s.tree,
 		s.expander,
 		s.paned,
+		// Column B wave extension
+		s.banner,
+		// Column C wave extension
+		s.chip, s.splitButton,
 	}
 
 	return s
@@ -440,6 +573,28 @@ func (s *state) draw(buf []byte) {
 	s.expander.Draw(p, s.theme)
 	s.panedLabel.Draw(p, s.theme)
 	s.paned.Draw(p, s.theme)
+
+	// Column A — Wave 1 (v0.7) highlights.
+	s.wave1Label.Draw(p, s.theme)
+	s.swtch.Draw(p, s.theme)
+	s.alert.Draw(p, s.theme)
+	s.card.Draw(p, s.theme)
+	s.steps.Draw(p, s.theme)
+
+	// Column B — Wave 2 (v0.8) highlights.
+	s.wave2Label.Draw(p, s.theme)
+	s.headerBar.Draw(p, s.theme)
+	s.toast.Draw(p, s.theme)
+	s.banner.Draw(p, s.theme)
+	s.diff.Draw(p, s.theme)
+
+	// Column C — Wave 3 (v0.9) highlights.
+	s.wave3Label.Draw(p, s.theme)
+	s.stat.Draw(p, s.theme)
+	s.progressCircle.Draw(p, s.theme)
+	s.timeline.Draw(p, s.theme)
+	s.chip.Draw(p, s.theme)
+	s.splitButton.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)

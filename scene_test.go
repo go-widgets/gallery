@@ -260,6 +260,54 @@ func TestAllToggleBranches(t *testing.T) {
 	}
 }
 
+// TestAllWaveCallbacks exercises the OnToggle / OnAction / OnClose /
+// OnClick / OnArrow callbacks attached to the wave-1/2/3 highlight
+// widgets. None of them route through the clickables table (the
+// widgets are wired at Draw time and the callbacks are the only
+// observable outcome), so they need direct invocation to reach 100 %.
+func TestAllWaveCallbacks(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+
+	// Switch ON branch.
+	s.notify.Text = ""
+	s.swtch.OnToggle(true)
+	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-2:] != "ON" {
+		t.Fatalf("Switch ON branch: text=%q", s.notify.Text)
+	}
+	// Switch OFF branch.
+	s.notify.Text = ""
+	s.swtch.OnToggle(false)
+	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-3:] != "OFF" {
+		t.Fatalf("Switch OFF branch: text=%q", s.notify.Text)
+	}
+
+	// Banner action.
+	s.notify.Text = ""
+	s.banner.OnAction()
+	if s.notify.Text == "" {
+		t.Fatal("Banner OnAction did not show notify")
+	}
+
+	// Chip close.
+	s.notify.Text = ""
+	s.chip.OnClose()
+	if s.notify.Text == "" {
+		t.Fatal("Chip OnClose did not show notify")
+	}
+
+	// SplitButton main click + arrow click.
+	s.notify.Text = ""
+	s.splitButton.OnClick()
+	if s.notify.Text == "" {
+		t.Fatal("SplitButton OnClick did not show notify")
+	}
+	s.notify.Text = ""
+	s.splitButton.OnArrow()
+	if s.notify.Text == "" {
+		t.Fatal("SplitButton OnArrow did not show notify")
+	}
+}
+
 func TestFillBGCoversWholeSurface(t *testing.T) {
 	surf := newSurface()
 	fillBG(surf, surfaceW, surfaceH, toolkit.RGB(0xFF, 0x00, 0xAB))
