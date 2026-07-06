@@ -25,19 +25,33 @@ Pages, S3, ...).
 
 ## Layout
 
-`scene.go` composes every widget family from the toolkit onto a
-720×480 surface:
+`scene.go` composes widgets from the toolkit onto a **960×720**
+surface as a three-column card grid — every widget kind lives in
+its own labelled slot rather than being hidden behind a tab. Around
+it:
 
-- **MenuBar** (File / Edit / View / Help) — clicking a name opens a
-  popover the host paints under it
+- **MenuBar** (File / Edit / View / Help) — clicking a name opens
+  a popover the host paints under it.
 - **Toolbar** (New / Open / Save / … / About) — each click fires a
-  Notification toast
-- **Notebook** (Buttons / Input / List+Tree / Feedback / Composites)
-  — one primary widget per tab plus a couple of auxiliaries for
-  the visual weight
-- **Statusbar** — 4-segment readout at the bottom
+  Notification toast.
+- **Statusbar** — 4-segment readout at the bottom.
 - **Notification** — top-right toast, auto-dismisses via a 60 Hz
-  `setInterval` that calls `state.tick()`
+  `setInterval` that calls `state.tick()`.
+
+The scene currently exposes the pre-v0.7 widget catalogue (27
+constructors — MenuBar/Toolbar/Notebook/DropDown/TreeView/… — that
+already covered the core toolkit surface). The 29 widgets shipped
+across v0.7 / v0.8 / v0.9 (Switch, Alert, Card, Steps, Table,
+Toast, Banner, ActionRow, ViewSwitcher, ChatBubble, Diff, Stat,
+Timeline, DropZone, Chip, FormField, ProgressCircle, …) are
+compiled into the wasm bundle but not yet composed into a slot —
+adding them is a slot-geometry follow-up.
+
+The SVG-per-widget variant of the same catalogue (43 widgets, one
+`.svg` + `.png` each) is available at <https://go-widgets.github.io/svg/>
+via [`go-widgets/svg`](https://github.com/go-widgets/svg)'s
+`gallery-render` command, which is regenerated on every toolkit dep
+bump.
 
 ## License
 
