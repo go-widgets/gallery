@@ -176,11 +176,11 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.notify.Show("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.notify.Show("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.9.2") }},
+		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.21.0") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"40 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.9.2"})
+	s.status = toolkit.NewStatusbar([]string{"69 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.21.0"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
@@ -327,10 +327,16 @@ func newState(w, h int) *state {
 	// re-sizes its active page to fill the body, which is exactly what
 	// we want here — a Label with tight bounds inherits the body's
 	// full width.
+	// The tabs showcase the v0.12-v0.15 display widgets — a live chart family
+	// plus a Markdown view. The Notebook bounds + draws only the active page,
+	// so each is auto-sized to the body area; all are display-only, so no
+	// per-tab event routing is needed.
 	s.notebook = toolkit.NewNotebook()
-	s.notebook.AddTab("One", toolkit.NewLabel("First tab body"))
-	s.notebook.AddTab("Two", toolkit.NewLabel("Second tab body"))
-	s.notebook.AddTab("Three", toolkit.NewLabel("Third tab body"))
+	s.notebook.AddTab("Line", toolkit.NewLineChart([]float64{3, 7, 2, 8, 5, 9, 4, 6}))
+	s.notebook.AddTab("Bar", toolkit.NewBarChart([]float64{4, 7, 2, 8, 5, 3}))
+	s.notebook.AddTab("Pie", toolkit.NewPieChart([]float64{3, 5, 2, 4, 1}))
+	s.notebook.AddTab("Docs", toolkit.NewMarkdownView(
+		"# Charts\n\nLive toolkit charts, one per tab:\n\n- line\n- bar\n- pie"))
 	s.notebook.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 80})
 	y += 80
 	s.pushCard(colAX, cardStart, colW, y-cardStart)
