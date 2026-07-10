@@ -238,8 +238,8 @@ func newState(w, h int) *state {
 	cardStart := y
 
 	s.actionsLabel = toolkit.NewLabel("Actions")
-	s.actionsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
-	y += toolkit.GlyphHeight + sectGap
+	s.actionsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
 
 	s.button = toolkit.NewButton("Click me", func() { s.notify.Show("Button clicked") })
 	s.button.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 140, H: 28})
@@ -276,8 +276,8 @@ func newState(w, h int) *state {
 	cardStart = y
 
 	s.inputsLabel = toolkit.NewLabel("Inputs")
-	s.inputsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
-	y += toolkit.GlyphHeight + sectGap
+	s.inputsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
 
 	s.entry = toolkit.NewEntry("editable text")
 	s.entry.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 26})
@@ -297,8 +297,8 @@ func newState(w, h int) *state {
 	cardStart = y
 
 	s.feedbackLabel = toolkit.NewLabel("Feedback")
-	s.feedbackLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
-	y += toolkit.GlyphHeight + sectGap
+	s.feedbackLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
 
 	s.progress = toolkit.NewProgressBar()
 	s.progress.Fraction = 0.66
@@ -320,8 +320,8 @@ func newState(w, h int) *state {
 	cardStart = y
 
 	s.notebookLabel = toolkit.NewLabel("Notebook")
-	s.notebookLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
-	y += toolkit.GlyphHeight + sectGap
+	s.notebookLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
 
 	// Notebook demo: three tabs each hosting a Label. Notebook.Draw
 	// re-sizes its active page to fill the body, which is exactly what
@@ -341,8 +341,8 @@ func newState(w, h int) *state {
 	cardStartB := yB
 
 	s.textLabel = toolkit.NewLabel("TextView")
-	s.textLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
-	yB += toolkit.GlyphHeight + sectGap
+	s.textLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
 
 	s.textView = toolkit.NewTextView("Multi-line editor.\nType to insert.\nEnter splits a line.\nArrow keys navigate.")
 	s.textView.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 110})
@@ -352,8 +352,8 @@ func newState(w, h int) *state {
 	cardStartB = yB
 
 	s.calLabel = toolkit.NewLabel("Calendar")
-	s.calLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
-	yB += toolkit.GlyphHeight + sectGap
+	s.calLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
 
 	s.calendar = toolkit.NewCalendar(2026, 7, 2)
 	s.calendar.SetToday(2026, 7, 2)
@@ -364,8 +364,8 @@ func newState(w, h int) *state {
 	cardStartB = yB
 
 	s.colorLabel = toolkit.NewLabel("ColorChooser")
-	s.colorLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
-	yB += toolkit.GlyphHeight + sectGap
+	s.colorLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
 
 	s.colorChoose = toolkit.NewColorChooser(toolkit.RGB(0x0d, 0x94, 0x88))
 	s.colorChoose.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 130})
@@ -378,8 +378,8 @@ func newState(w, h int) *state {
 	cardStartC := yC
 
 	s.listLabel = toolkit.NewLabel("ListBox")
-	s.listLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
-	yC += toolkit.GlyphHeight + sectGap
+	s.listLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
 
 	s.listBox = toolkit.NewListBox([]string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"})
 	s.listBox.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 130})
@@ -389,8 +389,8 @@ func newState(w, h int) *state {
 	cardStartC = yC
 
 	s.treeLabel = toolkit.NewLabel("TreeView")
-	s.treeLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
-	yC += toolkit.GlyphHeight + sectGap
+	s.treeLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
 
 	s.tree = toolkit.NewTreeView(&toolkit.TreeNode{
 		Label: "/", Expanded: true, Children: []*toolkit.TreeNode{
@@ -408,8 +408,8 @@ func newState(w, h int) *state {
 	cardStartC = yC
 
 	s.expLabel = toolkit.NewLabel("Expander + Frame")
-	s.expLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
-	yC += toolkit.GlyphHeight + sectGap
+	s.expLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
 
 	// Expander wraps a Frame that hosts a Label — showcases layout
 	// composition (Container → Container → leaf) without needing a
@@ -425,8 +425,8 @@ func newState(w, h int) *state {
 	cardStartC = yC
 
 	s.panedLabel = toolkit.NewLabel("Paned (horizontal split)")
-	s.panedLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
-	yC += toolkit.GlyphHeight + sectGap
+	s.panedLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
 
 	// Paned demo: horizontal split hosting two Labels. Paned.SetBounds
 	// centres the handle on first sizing, so no manual Position is needed.
@@ -441,8 +441,8 @@ func newState(w, h int) *state {
 	cardStart = y
 
 	s.wave1Label = toolkit.NewLabel("Wave 1 (v0.7)")
-	s.wave1Label.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight})
-	y += toolkit.GlyphHeight + sectGap
+	s.wave1Label.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
 
 	s.swtch = toolkit.NewSwitch(true)
 	s.swtch.OnToggle = func(on bool) {
@@ -474,8 +474,8 @@ func newState(w, h int) *state {
 	cardStartB = yB
 
 	s.wave2Label = toolkit.NewLabel("Wave 2 (v0.8)")
-	s.wave2Label.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight})
-	yB += toolkit.GlyphHeight + sectGap
+	s.wave2Label.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
 
 	s.headerBar = toolkit.NewHeaderBar("Files")
 	s.headerBar.Subtitle = "~/Documents"
@@ -508,8 +508,8 @@ func newState(w, h int) *state {
 	cardStartC = yC
 
 	s.wave3Label = toolkit.NewLabel("Wave 3 (v0.9)")
-	s.wave3Label.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight})
-	yC += toolkit.GlyphHeight + sectGap
+	s.wave3Label.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
 
 	s.stat = toolkit.NewStat("Requests / min", "12,845")
 	s.stat.Change = "+8.3%"
