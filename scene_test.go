@@ -148,9 +148,9 @@ func encodeSurfaceAsPNG(surf []byte, path string) error {
 // on at least one of those samples.
 func surfaceSignature(surf []byte) string {
 	samples := []struct{ x, y int }{
-		{4, 4},                      // background
-		{surfaceW / 2, 30},          // toolbar
-		{surfaceW - 40, surfaceH/2}, // wave-3 accent zone
+		{4, 4},                        // background
+		{surfaceW / 2, 30},            // toolbar
+		{surfaceW - 40, surfaceH / 2}, // wave-3 accent zone
 	}
 	var buf [3 * 4]byte
 	for i, p := range samples {
@@ -403,6 +403,97 @@ func TestAllWaveCallbacks(t *testing.T) {
 		if s.notify.Text == "" {
 			t.Fatalf("themeSwitcher OnChange(%d) did not show notify for %q", i, name)
 		}
+	}
+}
+
+// --- Wave 4 (v0.33) new-param demos ----------------------------------------
+
+// TestWave4ParamsWired asserts every new v0.33 placement/orientation param
+// the gallery demos actually got set on the live widget instance (not just
+// left at its zero value) — the whole point of the wave-4 additions is to
+// exercise these fields.
+func TestWave4ParamsWired(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	if s.toolbarV == nil || s.toolbarV.Orientation != toolkit.Vertical {
+		t.Fatal("toolbarV should be a Vertical-orientation Toolbar")
+	}
+	if s.stepsV == nil || s.stepsV.Orientation != toolkit.Vertical {
+		t.Fatal("stepsV should be a Vertical-orientation Steps")
+	}
+	if s.notebookSide == nil || s.notebookSide.TabSide != toolkit.TabLeft {
+		t.Fatal("notebookSide should have TabSide = TabLeft")
+	}
+	if s.dropdownUp == nil || !s.dropdownUp.OpenUp {
+		t.Fatal("dropdownUp should have OpenUp = true")
+	}
+	if s.table == nil {
+		t.Fatal("table should be populated")
+	}
+	if len(s.table.Columns) != 2 || s.table.Columns[1].Align != toolkit.AlignRight {
+		t.Fatal("table's numeric column should be Align = AlignRight")
+	}
+	if s.timelineH == nil || !s.timelineH.Horizontal {
+		t.Fatal("timelineH should have Horizontal = true")
+	}
+	// The original (Column C, Wave 3) Timeline stays vertical — confirms the
+	// new field defaults false and the two instances demo both axes.
+	if s.timeline == nil || s.timeline.Horizontal {
+		t.Fatal("the wave-3 timeline should remain the default vertical layout")
+	}
+}
+
+// TestAllToolbarVStubsFire exercises the vertical side-rail Toolbar's
+// OnClick closures — wired at construction time, not routed through
+// s.clickables in this test (that path is covered separately below).
+func TestAllToolbarVStubsFire(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	for i := range s.toolbarV.Items {
+		s.notify.Visible = false
+		s.toolbarV.Items[i].OnClick()
+		if !s.notify.Visible {
+			t.Errorf("toolbarV.Items[%d].OnClick did not show a notification", i)
+		}
+	}
+}
+
+// TestClickToolbarVDispatchesThroughClickables drives a real handleClick
+// at the vertical toolbar's first button to prove it's wired into the
+// clickables hit-test table (not just constructed).
+func TestClickToolbarVDispatchesThroughClickables(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	r := s.toolbarV.Bounds()
+	s.handleClick(r.X+r.W/2, r.Y+toolkit.ToolbarButtonH/2)
+	if !s.notify.Visible || s.notify.Text == "" {
+		t.Fatal("clicking the vertical toolbar's first button did not fire a notification")
+	}
+}
+
+// TestClickNotebookSideSwitchesTab drives a real handleClick on the second
+// (left-side) tab of the side-tab Notebook demo, proving TabLeft hit-testing
+// is wired through s.clickables.
+func TestClickNotebookSideSwitchesTab(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	r := s.notebookSide.Bounds()
+	// Tab strip runs down the left edge; tab 1 ("B") sits one
+	// NotebookTabStripH below tab 0.
+	s.handleClick(r.X+10, r.Y+toolkit.NotebookTabStripH+4)
+	if s.notebookSide.Active != 1 {
+		t.Fatalf("clicking the second left-side tab should select it; Active=%d", s.notebookSide.Active)
+	}
+}
+
+// TestClickDropdownUpToggles drives a real handleClick on the upward-opening
+// DropDown demo, proving it's wired through s.clickables.
+func TestClickDropdownUpToggles(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	r := s.dropdownUp.Bounds()
+	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
+	if !s.dropdownUp.Open {
+		t.Fatal("clicking dropdownUp should open its popover")
+	}
+	pop := s.dropdownUp.PopoverBounds()
+	if pop.Y >= r.Y {
+		t.Fatalf("OpenUp popover should sit above the control; popover.Y=%d control.Y=%d", pop.Y, r.Y)
 	}
 }
 
