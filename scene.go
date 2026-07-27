@@ -34,11 +34,11 @@ const (
 	margin  = 8
 	gutter  = 8
 	colW    = (surfaceW - 2*margin - 2*gutter) / 3 // = 314
-	colAX   = margin                                // 8
-	colBX   = colAX + colW + gutter                 // 330
-	colCX   = colBX + colW + gutter                 // 652
-	sectGap = 6                                     // px between rows in a section
-	sectPad = 10                                    // px between adjacent sections
+	colAX   = margin                               // 8
+	colBX   = colAX + colW + gutter                // 330
+	colCX   = colBX + colW + gutter                // 652
+	sectGap = 6                                    // px between rows in a section
+	sectPad = 10                                   // px between adjacent sections
 )
 
 type state struct {
@@ -118,6 +118,27 @@ type state struct {
 	progressCircle *toolkit.ProgressCircle
 	splitButton    *toolkit.SplitButton
 
+	// Column-A Wave 4 (v0.33) highlights: a vertical Toolbar side rail
+	// + a vertical Steps checklist, demonstrating Toolbar.Orientation
+	// and Steps.Orientation.
+	wave4LabelA *toolkit.Label
+	toolbarV    *toolkit.Toolbar
+	stepsV      *toolkit.Steps
+
+	// Column-B Wave 4 (v0.33) highlights: a second, smaller Notebook
+	// with its tab strip on the left (Notebook.TabSide) + a second
+	// DropDown that opens its popover upward (DropDown.OpenUp).
+	wave4LabelB  *toolkit.Label
+	notebookSide *toolkit.Notebook
+	dropdownUp   *toolkit.DropDown
+
+	// Column-C Wave 4 (v0.33) highlights: a Table with a right-aligned
+	// numeric column (TableColumn.Align) + a horizontal Timeline ribbon
+	// (Timeline.Horizontal).
+	wave4LabelC *toolkit.Label
+	table       *toolkit.Table
+	timelineH   *toolkit.Timeline
+
 	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
 	// Each segment installs a distinct palette so the whole scene
 	// repaints on click — validates that the toolkit's Theme value
@@ -155,7 +176,7 @@ func newState(w, h int) *state {
 	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
 	menu := func(label string) toolkit.MenuItem {
-		return toolkit.MenuItem{Label: label, Action: func() { s.notify.Show("clicked: " + label) }}
+		return toolkit.MenuItem{Label: label, Action: func() { s.showNotify("clicked: " + label) }}
 	}
 	s.menuBar = toolkit.NewMenuBar()
 	s.menuBar.Names = []string{"File", "Edit", "View", "Help"}
@@ -168,19 +189,19 @@ func newState(w, h int) *state {
 	s.menuBar.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: toolkit.MenuBarH})
 
 	s.toolbar = toolkit.NewToolbar([]toolkit.ToolbarItem{
-		{Label: "N", OnClick: func() { s.notify.Show("Toolbar: New") }},
-		{Label: "O", OnClick: func() { s.notify.Show("Toolbar: Open") }},
-		{Label: "S", OnClick: func() { s.notify.Show("Toolbar: Save") }},
+		{Label: "N", OnClick: func() { s.showNotify("Toolbar: New") }},
+		{Label: "O", OnClick: func() { s.showNotify("Toolbar: Open") }},
+		{Label: "S", OnClick: func() { s.showNotify("Toolbar: Save") }},
 		{Separator: true},
-		{Label: "C", OnClick: func() { s.notify.Show("Toolbar: Copy") }},
-		{Label: "X", OnClick: func() { s.notify.Show("Toolbar: Cut") }},
-		{Label: "V", OnClick: func() { s.notify.Show("Toolbar: Paste") }},
+		{Label: "C", OnClick: func() { s.showNotify("Toolbar: Copy") }},
+		{Label: "X", OnClick: func() { s.showNotify("Toolbar: Cut") }},
+		{Label: "V", OnClick: func() { s.showNotify("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.notify.Show("go-widgets/toolkit @ v0.21.0") }},
+		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.33.0") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"69 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.21.0"})
+	s.status = toolkit.NewStatusbar([]string{"78 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.33.0"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
@@ -223,7 +244,7 @@ func newState(w, h int) *state {
 	s.themeSwitcher = toolkit.NewViewSwitcher(s.themeNames, 0)
 	s.themeSwitcher.OnChange = func(i int) {
 		s.theme = s.themes[i]
-		s.notify.Show("Theme: " + s.themeNames[i])
+		s.showNotify("Theme: " + s.themeNames[i])
 	}
 	s.themeSwitcher.SetBounds(toolkit.Rect{
 		X: margin,
@@ -241,15 +262,15 @@ func newState(w, h int) *state {
 	s.actionsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
 	y += toolkit.GlyphHeight() + sectGap
 
-	s.button = toolkit.NewButton("Click me", func() { s.notify.Show("Button clicked") })
+	s.button = toolkit.NewButton("Click me", func() { s.showNotify("Button clicked") })
 	s.button.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 140, H: 28})
 
 	s.toggle = toolkit.NewToggleButton("Toggle", false)
 	s.toggle.OnToggle = func(on bool) {
 		if on {
-			s.notify.Show("Toggle: ON")
+			s.showNotify("Toggle: ON")
 		} else {
-			s.notify.Show("Toggle: OFF")
+			s.showNotify("Toggle: OFF")
 		}
 	}
 	s.toggle.SetBounds(toolkit.Rect{X: colAX + 148, Y: y, W: 140, H: 28})
@@ -453,9 +474,9 @@ func newState(w, h int) *state {
 	s.swtch = toolkit.NewSwitch(true)
 	s.swtch.OnToggle = func(on bool) {
 		if on {
-			s.notify.Show("Switch: ON")
+			s.showNotify("Switch: ON")
 		} else {
-			s.notify.Show("Switch: OFF")
+			s.showNotify("Switch: OFF")
 		}
 	}
 	s.swtch.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 44, H: 22})
@@ -472,6 +493,45 @@ func newState(w, h int) *state {
 	s.steps = toolkit.NewSteps([]string{"Plan", "Build", "Test", "Ship"}, 1)
 	s.steps.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 32})
 	y += 32
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+
+	// --- Column A extension: Wave 4 (v0.33) highlights -------------------
+	//
+	// A vertical Toolbar side rail (Toolbar.Orientation = Vertical) sits
+	// beside a vertical Steps checklist (Steps.Orientation = Vertical) —
+	// both new v0.33 layout axes, shown side by side so the row reads as
+	// "same widget, rotated".
+
+	y += sectPad
+	cardStart = y
+
+	s.wave4LabelA = toolkit.NewLabel("Wave 4 (v0.33)")
+	s.wave4LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
+
+	const railW = 24 // one ToolbarButtonW-wide column
+	s.toolbarV = toolkit.NewToolbar([]toolkit.ToolbarItem{
+		{Label: "A", OnClick: func() { s.showNotify("Side rail: A") }},
+		{Label: "B", OnClick: func() { s.showNotify("Side rail: B") }},
+		{Label: "C", OnClick: func() { s.showNotify("Side rail: C") }},
+	})
+	s.toolbarV.Orientation = toolkit.Vertical
+	railH := 3 * toolkit.ToolbarButtonH
+
+	s.stepsV = toolkit.NewSteps([]string{"Plan", "Build", "Ship"}, 1)
+	s.stepsV.Orientation = toolkit.Vertical
+	// Steps.Draw (vertical) advances 3*StepBoxH + 2*StepConnectorW px
+	// regardless of the bounds' H, so the row's actual footprint is
+	// driven by the taller of the two widgets, not the shorter rail.
+	stepsVH := 3*toolkit.StepBoxH + 2*toolkit.StepConnectorW
+	rowH := railH
+	if stepsVH > rowH {
+		rowH = stepsVH
+	}
+	s.toolbarV.SetBounds(toolkit.Rect{X: colAX, Y: y, W: railW, H: rowH})
+	stepsVX := colAX + railW + sectGap
+	s.stepsV.SetBounds(toolkit.Rect{X: stepsVX, Y: y, W: colW - railW - sectGap, H: stepsVH})
+	y += rowH
 	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B extension: Wave 2 (v0.8) highlights -------------------
@@ -495,7 +555,7 @@ func newState(w, h int) *state {
 
 	s.banner = toolkit.NewBanner("Update available.")
 	s.banner.ButtonLabel = "Install"
-	s.banner.OnAction = func() { s.notify.Show("Banner action clicked") }
+	s.banner.OnAction = func() { s.showNotify("Banner action clicked") }
 	s.banner.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 24})
 	yB += 24 + sectGap
 
@@ -506,6 +566,33 @@ func newState(w, h int) *state {
 	})
 	s.diff.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 54})
 	yB += 54
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+
+	// --- Column B extension: Wave 4 (v0.33) highlights -------------------
+	//
+	// A second, smaller Notebook with its tab strip on the left
+	// (Notebook.TabSide = TabLeft) sits above a second DropDown that
+	// opens its popover upward (DropDown.OpenUp), the natural choice
+	// for a control this close to the Statusbar.
+
+	yB += sectPad
+	cardStartB = yB
+
+	s.wave4LabelB = toolkit.NewLabel("Wave 4 (v0.33)")
+	s.wave4LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
+
+	s.notebookSide = toolkit.NewNotebook()
+	s.notebookSide.TabSide = toolkit.TabLeft
+	s.notebookSide.AddTab("A", toolkit.NewLabel("Tabs on the left"))
+	s.notebookSide.AddTab("B", toolkit.NewLabel("(TabSide = TabLeft)"))
+	s.notebookSide.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 70})
+	yB += 70 + sectGap
+
+	s.dropdownUp = toolkit.NewDropDown([]string{"Opens upward", "OpenUp = true"}, 0)
+	s.dropdownUp.OpenUp = true
+	s.dropdownUp.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 26})
+	yB += 26
 	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C extension: Wave 3 (v0.9) highlights -------------------
@@ -536,13 +623,52 @@ func newState(w, h int) *state {
 
 	s.chip = toolkit.NewChip("frontend")
 	s.chip.Closable = true
-	s.chip.OnClose = func() { s.notify.Show("Chip closed") }
+	s.chip.OnClose = func() { s.showNotify("Chip closed") }
 	s.chip.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: 96, H: 22})
 	s.splitButton = toolkit.NewSplitButton("Deploy",
-		func() { s.notify.Show("SplitButton: Deploy") })
-	s.splitButton.OnArrow = func() { s.notify.Show("SplitButton: arrow menu") }
+		func() { s.showNotify("SplitButton: Deploy") })
+	s.splitButton.OnArrow = func() { s.showNotify("SplitButton: arrow menu") }
 	s.splitButton.SetBounds(toolkit.Rect{X: colCX + 104, Y: yC, W: colW - 104, H: 22})
 	yC += 22
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+
+	// --- Column C extension: Wave 4 (v0.33) highlights -------------------
+	//
+	// A Table with its numeric column right-aligned (TableColumn.Align =
+	// AlignRight) sits above a horizontal Timeline ribbon (Timeline.
+	// Horizontal = true) — the same event log as the vertical Timeline
+	// above, rotated onto the layout axis a status ribbon would use.
+
+	yC += sectPad
+	cardStartC = yC
+
+	s.wave4LabelC = toolkit.NewLabel("Wave 4 (v0.33)")
+	s.wave4LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
+
+	s.table = toolkit.NewTable(
+		[]toolkit.TableColumn{
+			{Title: "Widget"},
+			{Title: "Count", Width: 60, Align: toolkit.AlignRight},
+		},
+		[][]string{
+			{"Buttons", "12"},
+			{"Inputs", "9"},
+			{"Charts", "3"},
+		},
+	)
+	tableH := toolkit.TableHeaderHeight + 3*toolkit.TableRowHeight
+	s.table.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: tableH})
+	yC += tableH + sectGap
+
+	s.timelineH = toolkit.NewTimeline([]toolkit.TimelineEvent{
+		{Title: "Init", Kind: toolkit.TimelineDefault},
+		{Title: "Build", Kind: toolkit.TimelineSuccess},
+		{Title: "Deploy", Kind: toolkit.TimelineWarning},
+	})
+	s.timelineH.Horizontal = true
+	s.timelineH.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 36})
+	yC += 36
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- click routing table --------------------------------------------
@@ -569,9 +695,24 @@ func newState(w, h int) *state {
 		s.banner,
 		// Column C wave extension
 		s.chip, s.splitButton,
+		// Column A Wave 4 extension
+		s.toolbarV,
+		// Column B Wave 4 extension
+		s.notebookSide, s.dropdownUp,
 	}
 
 	return s
+}
+
+// showNotify shows text on the shared Notification, then re-anchors it to
+// the bottom-right corner of the surface (just above the Statusbar) via
+// Notification.AnchorIn. Anchoring after Show (rather than once at
+// construction) matters because AnchorIn sizes the box from the CURRENT
+// Text — a fixed-size box computed up front would either clip a long
+// message or leave a wide empty box around a short one.
+func (s *state) showNotify(text string) {
+	s.notify.Show(text)
+	s.notify.AnchorIn(toolkit.Rect{X: 0, Y: 0, W: s.w, H: s.h - toolkit.StatusbarH}, toolkit.BottomRight)
 }
 
 // pushCard records the outer rectangle of a section — extended by
@@ -667,6 +808,21 @@ func (s *state) draw(buf []byte) {
 	s.timeline.Draw(p, s.theme)
 	s.chip.Draw(p, s.theme)
 	s.splitButton.Draw(p, s.theme)
+
+	// Column A — Wave 4 (v0.33) highlights: vertical Toolbar + vertical Steps.
+	s.wave4LabelA.Draw(p, s.theme)
+	s.toolbarV.Draw(p, s.theme)
+	s.stepsV.Draw(p, s.theme)
+
+	// Column B — Wave 4 (v0.33) highlights: side-tab Notebook + upward DropDown.
+	s.wave4LabelB.Draw(p, s.theme)
+	s.notebookSide.Draw(p, s.theme)
+	s.dropdownUp.Draw(p, s.theme)
+
+	// Column C — Wave 4 (v0.33) highlights: right-aligned Table + horizontal Timeline.
+	s.wave4LabelC.Draw(p, s.theme)
+	s.table.Draw(p, s.theme)
+	s.timelineH.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
