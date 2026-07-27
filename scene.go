@@ -20,7 +20,7 @@ import (
 // labelled slot rather than being hidden behind a Notebook tab.
 const (
 	surfaceW = 960
-	surfaceH = 1016
+	surfaceH = 1303
 )
 
 // themeRowH sizes the ViewSwitcher strip sitting between the Toolbar
@@ -139,6 +139,32 @@ type state struct {
 	table       *toolkit.Table
 	timelineH   *toolkit.Timeline
 
+	// Column-A Wave 5 (v0.42) highlights: Accordion (collapsible
+	// sections), ColorPicker (HSV square + hue/alpha sliders) and
+	// SegmentedBar (proportional multi-colour meter).
+	wave5LabelA *toolkit.Label
+	accordion   *toolkit.Accordion
+	colorPicker *toolkit.ColorPicker
+	segBar      *toolkit.SegmentedBar
+
+	// Column-B Wave 5 (v0.42) highlights: Carousel (paged slide viewer),
+	// MarkdownEditor (live source/preview split) and DateRangePicker
+	// (two-endpoint month-grid selection).
+	wave5LabelB *toolkit.Label
+	carousel    *toolkit.Carousel
+	mdEditor    *toolkit.MarkdownEditor
+	dateRange   *toolkit.DateRangePicker
+
+	// Column-C Wave 5 (v0.42) highlights: Wizard (multi-step flow) and
+	// TreeTable (Table-shaped grid with nesting). A CommandPalette is
+	// wired as a canvas-wide overlay, opened from a trigger Button here
+	// and drawn last (like Notification) so it floats above everything.
+	wave5LabelC *toolkit.Label
+	wizard      *toolkit.Wizard
+	treeTable   *toolkit.TreeTable
+	paletteBtn  *toolkit.Button
+	cmdPalette  *toolkit.CommandPalette
+
 	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
 	// Each segment installs a distinct palette so the whole scene
 	// repaints on click — validates that the toolkit's Theme value
@@ -175,6 +201,18 @@ func newState(w, h int) *state {
 	s.notify = toolkit.NewNotification("")
 	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
+	// CommandPalette is a canvas-wide overlay (like the menu popover):
+	// Bounds spans the whole surface so it can catch an outside click
+	// anywhere + centre its panel, and incoming event coordinates need
+	// no translation since X/Y are already 0.
+	s.cmdPalette = toolkit.NewCommandPalette([]toolkit.PaletteCommand{
+		{Label: "New file", Action: func() { s.showNotify("Palette: New file") }},
+		{Label: "Open recent", Action: func() { s.showNotify("Palette: Open recent") }},
+		{Label: "Toggle theme", Action: func() { s.showNotify("Palette: Toggle theme") }},
+		{Label: "About gallery", Action: func() { s.showNotify("Palette: About gallery") }},
+	})
+	s.cmdPalette.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: h})
+
 	menu := func(label string) toolkit.MenuItem {
 		return toolkit.MenuItem{Label: label, Action: func() { s.showNotify("clicked: " + label) }}
 	}
@@ -197,11 +235,11 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.showNotify("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.showNotify("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.33.0") }},
+		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.42.0") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"78 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.33.0"})
+	s.status = toolkit.NewStatusbar([]string{"~85 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.42.0"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
@@ -671,6 +709,124 @@ func newState(w, h int) *state {
 	yC += 36
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
+	// --- Column A extension: Wave 5 (v0.42) highlights -------------------
+	//
+	// Accordion (exclusive collapsible sections, second one pre-expanded)
+	// sits above a ColorPicker (HSV square + hue/alpha sliders) and a
+	// SegmentedBar (a disk-usage-style proportional meter).
+
+	y += sectPad
+	cardStart = y
+
+	s.wave5LabelA = toolkit.NewLabel("Wave 5 (v0.42)")
+	s.wave5LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
+
+	s.accordion = toolkit.NewAccordion([]toolkit.AccordionSection{
+		{Title: "Specs", Body: toolkit.NewLabel("2.4 GHz / 16 GB / 512 GB")},
+		{Title: "Shipping", Body: toolkit.NewLabel("Ships in 2-3 business days")},
+		{Title: "Returns", Body: toolkit.NewLabel("30-day free returns")},
+	})
+	s.accordion.Expanded = 1
+	const accordionH = 3*toolkit.ExpanderHeaderH + 56
+	s.accordion.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: accordionH})
+	y += accordionH + sectGap
+
+	s.colorPicker = toolkit.NewColorPicker(toolkit.RGB(0x35, 0x84, 0xe4))
+	s.colorPicker.OnChange = func(c toolkit.RGBA) { s.showNotify("ColorPicker changed") }
+	s.colorPicker.SetBounds(toolkit.Rect{X: colAX, Y: y, W: toolkit.ColorPickerWidth, H: toolkit.ColorPickerHeight})
+	y += toolkit.ColorPickerHeight + sectGap
+
+	s.segBar = toolkit.NewSegmentedBar([]toolkit.BarSegment{
+		{Value: 62, Fill: toolkit.RGB(0x35, 0x84, 0xe4), Label: "used"},
+		{Value: 18, Fill: toolkit.RGB(0xe5, 0xa5, 0x0a), Label: "reserved"},
+		{Value: 20, Fill: toolkit.RGB(0xc0, 0xbf, 0xbc), Label: "free"},
+	})
+	s.segBar.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 22})
+	y += 22
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+
+	// --- Column B extension: Wave 5 (v0.42) highlights -------------------
+	//
+	// Carousel (three paged slides) sits above a MarkdownEditor (live
+	// source/preview split) and a DateRangePicker (two-endpoint month
+	// grid selection), the v0.42 text/time-family additions.
+
+	yB += sectPad
+	cardStartB = yB
+
+	s.wave5LabelB = toolkit.NewLabel("Wave 5 (v0.42)")
+	s.wave5LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
+
+	s.carousel = toolkit.NewCarousel([]toolkit.Widget{
+		toolkit.NewCard("Slide 1", "First featured panel.", ""),
+		toolkit.NewCard("Slide 2", "Second featured panel.", ""),
+		toolkit.NewCard("Slide 3", "Third featured panel.", ""),
+	})
+	s.carousel.Wrap = true
+	const carouselH = 74 + 16 // content + dots strip
+	s.carousel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: carouselH})
+	yB += carouselH + sectGap
+
+	s.mdEditor = toolkit.NewMarkdownEditor("# Notes\n\n- live *preview*\n- side by side")
+	const mdEditorH = 90
+	s.mdEditor.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: mdEditorH})
+	yB += mdEditorH + sectGap
+
+	s.dateRange = toolkit.NewDateRangePicker(2026, 7)
+	s.dateRange.Start = toolkit.Date{Y: 2026, M: 7, D: 10}
+	s.dateRange.End = toolkit.Date{Y: 2026, M: 7, D: 17}
+	s.dateRange.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 168})
+	yB += 168
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+
+	// --- Column C extension: Wave 5 (v0.42) highlights -------------------
+	//
+	// Wizard (multi-step Plan → Build → Ship flow) sits above a TreeTable
+	// (Table-shaped grid with nesting) and a trigger Button that opens the
+	// CommandPalette overlay constructed up in newState's top scaffold.
+
+	yC += sectPad
+	cardStartC = yC
+
+	s.wave5LabelC = toolkit.NewLabel("Wave 5 (v0.42)")
+	s.wave5LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
+
+	s.wizard = toolkit.NewWizard([]toolkit.WizardStep{
+		{Title: "Plan", Body: toolkit.NewLabel("Sketch the release scope.")},
+		{Title: "Build", Body: toolkit.NewLabel("Wire the new widgets in.")},
+		{Title: "Ship", Body: toolkit.NewLabel("Tag + publish the gallery.")},
+	})
+	const wizardH = toolkit.WizardStripH + 40 + toolkit.WizardButtonRowH
+	s.wizard.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: wizardH})
+	yC += wizardH + sectGap
+
+	s.treeTable = toolkit.NewTreeTable(
+		[]toolkit.TreeTableColumn{
+			{Title: "Widget"},
+			{Title: "Kind", Width: 90},
+		},
+		[]*toolkit.TreeTableNode{
+			{Cells: []string{"Column A", "group"}, Expanded: true, Children: []*toolkit.TreeTableNode{
+				{Cells: []string{"Accordion", "leaf"}},
+				{Cells: []string{"ColorPicker", "leaf"}},
+			}},
+			{Cells: []string{"Column B", "group"}, Children: []*toolkit.TreeTableNode{
+				{Cells: []string{"Carousel", "leaf"}},
+			}},
+		},
+	)
+	const treeTableH = toolkit.TreeTableHeaderHeight + 4*toolkit.TreeTableRowHeight
+	s.treeTable.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: treeTableH})
+	yC += treeTableH + sectGap
+
+	s.paletteBtn = toolkit.NewButton("Open command palette ⌘", func() { s.cmdPalette.Open() })
+	s.paletteBtn.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 28})
+	yC += 28
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+
 	// --- click routing table --------------------------------------------
 
 	s.clickables = []toolkit.Widget{
@@ -699,6 +855,12 @@ func newState(w, h int) *state {
 		s.toolbarV,
 		// Column B Wave 4 extension
 		s.notebookSide, s.dropdownUp,
+		// Column A Wave 5 extension
+		s.accordion, s.colorPicker,
+		// Column B Wave 5 extension
+		s.carousel, s.mdEditor, s.dateRange,
+		// Column C Wave 5 extension
+		s.wizard, s.treeTable, s.paletteBtn,
 	}
 
 	return s
@@ -730,8 +892,8 @@ func (s *state) pushCard(x, y, w, h int) {
 // slice — buf and s.w/s.h are wrapped in a PixelPainter so the widget
 // code sees only the painter.Painter interface. Draw order matters:
 // background first, card outlines behind the widgets, then row
-// scaffolding, then widget cards, then overlays (menu popover +
-// notification) on top.
+// scaffolding, then widget cards, then overlays (menu popover,
+// notification, CommandPalette) on top.
 func (s *state) draw(buf []byte) {
 	fillBG(buf, s.w, s.h, s.theme.Background)
 	p := painter.NewPixelPainter(buf, s.w, s.h)
@@ -824,6 +986,24 @@ func (s *state) draw(buf []byte) {
 	s.table.Draw(p, s.theme)
 	s.timelineH.Draw(p, s.theme)
 
+	// Column A — Wave 5 (v0.42) highlights: Accordion + ColorPicker + SegmentedBar.
+	s.wave5LabelA.Draw(p, s.theme)
+	s.accordion.Draw(p, s.theme)
+	s.colorPicker.Draw(p, s.theme)
+	s.segBar.Draw(p, s.theme)
+
+	// Column B — Wave 5 (v0.42) highlights: Carousel + MarkdownEditor + DateRangePicker.
+	s.wave5LabelB.Draw(p, s.theme)
+	s.carousel.Draw(p, s.theme)
+	s.mdEditor.Draw(p, s.theme)
+	s.dateRange.Draw(p, s.theme)
+
+	// Column C — Wave 5 (v0.42) highlights: Wizard + TreeTable + CommandPalette trigger.
+	s.wave5LabelC.Draw(p, s.theme)
+	s.wizard.Draw(p, s.theme)
+	s.treeTable.Draw(p, s.theme)
+	s.paletteBtn.Draw(p, s.theme)
+
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
 
@@ -835,14 +1015,25 @@ func (s *state) draw(buf []byte) {
 		m.Draw(p, s.theme)
 	}
 	s.notify.Draw(p, s.theme)
+	// CommandPalette floats above everything (even the notification),
+	// matching the "Ctrl+Shift+P" pattern's z-order in a real host.
+	s.cmdPalette.Draw(p, s.theme)
 }
 
 // handleClick dispatches a click at (x, y) to whichever widget it
-// falls in. Overlays (open menu popover) take precedence; the top
-// scaffold (menu bar, toolbar) comes next; the dashboard clickables
-// come last, in draw order.
+// falls in. Overlays (an open CommandPalette, then an open menu
+// popover) take precedence; the top scaffold (menu bar, toolbar)
+// comes next; the dashboard clickables come last, in draw order.
 func (s *state) handleClick(x, y int) bool {
 	ev := toolkit.Event{Kind: toolkit.EventClick, X: x, Y: y}
+
+	// CommandPalette overlay first: it floats above even the menu popover
+	// (see draw's z-order), and its own OnEvent already handles an
+	// outside-click as "dismiss" — so every click is its concern while open.
+	if s.cmdPalette.Visible {
+		s.cmdPalette.OnEvent(ev)
+		return true
+	}
 
 	// Menu popover first: if one is open, prefer it.
 	if s.menuBar.Active >= 0 && s.menuBar.Active < len(s.menuBar.Menus) {
