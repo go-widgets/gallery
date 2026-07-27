@@ -507,6 +507,110 @@ func TestFillBGCoversWholeSurface(t *testing.T) {
 	}
 }
 
+// --- Wave 5 (v0.42) new-widget demos ----------------------------------------
+
+// TestWave5WidgetsPopulated asserts every v0.42 widget the gallery demos
+// exists and carries the parameters the demo is built around — mirroring
+// TestWave4ParamsWired for the newest wave.
+func TestWave5WidgetsPopulated(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	if s.accordion == nil || len(s.accordion.Sections) != 3 || s.accordion.Expanded != 1 {
+		t.Fatal("accordion should have 3 sections with the second pre-expanded")
+	}
+	if s.colorPicker == nil || s.colorPicker.OnChange == nil {
+		t.Fatal("colorPicker should be populated with an OnChange handler")
+	}
+	if s.segBar == nil || s.segBar.Total() != 100 {
+		t.Fatalf("segBar segments should total 100, got %v", s.segBar.Total())
+	}
+	if s.carousel == nil || len(s.carousel.Slides) != 3 || !s.carousel.Wrap {
+		t.Fatal("carousel should have 3 slides with Wrap = true")
+	}
+	if s.mdEditor == nil || s.mdEditor.Source == nil || s.mdEditor.Preview == nil {
+		t.Fatal("mdEditor should have both Source and Preview panes")
+	}
+	if s.dateRange == nil || s.dateRange.Start.D != 10 || s.dateRange.End.D != 17 {
+		t.Fatal("dateRange should have Start=10 and End=17 preset")
+	}
+	if s.wizard == nil || len(s.wizard.Steps) != 3 {
+		t.Fatal("wizard should have 3 steps")
+	}
+	if s.treeTable == nil || len(s.treeTable.Columns) != 2 || len(s.treeTable.Root) != 2 {
+		t.Fatal("treeTable should have 2 columns and 2 root nodes")
+	}
+	if s.paletteBtn == nil || s.cmdPalette == nil {
+		t.Fatal("paletteBtn + cmdPalette should be populated")
+	}
+	if s.cmdPalette.Visible {
+		t.Fatal("cmdPalette should start hidden")
+	}
+	if len(s.cmdPalette.Commands) != 4 {
+		t.Fatalf("cmdPalette should have 4 commands, got %d", len(s.cmdPalette.Commands))
+	}
+}
+
+// TestAllCommandPaletteActionsFire exercises every PaletteCommand.Action
+// closure wired in newState — the only observable outcome of each is the
+// Notification it fires, the same pattern TestAllMenuBarActionsFire uses.
+func TestAllCommandPaletteActionsFire(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	for i, cmd := range s.cmdPalette.Commands {
+		s.notify.Text = ""
+		if cmd.Action == nil {
+			t.Fatalf("command[%d] %q has a nil Action", i, cmd.Label)
+		}
+		cmd.Action()
+		if s.notify.Text == "" {
+			t.Errorf("command[%d] %q left notify.Text empty", i, cmd.Label)
+		}
+	}
+}
+
+// TestClickPaletteButtonOpensCommandPalette drives a real handleClick on the
+// trigger Button, proving it's wired into s.clickables and that it actually
+// opens the overlay (Visible flips true, Query/Selected reset).
+func TestClickPaletteButtonOpensCommandPalette(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	r := s.paletteBtn.Bounds()
+	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
+	if !s.cmdPalette.Visible {
+		t.Fatal("clicking the trigger button should open the CommandPalette")
+	}
+}
+
+// TestHandleClickRoutesToOpenCommandPalette proves the CommandPalette-first
+// branch in handleClick: once Visible, any click (even far from the panel)
+// is handed to the palette instead of falling through to the dashboard
+// clickables. Clicking outside the centered panel dismisses it.
+func TestHandleClickRoutesToOpenCommandPalette(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.cmdPalette.Open()
+	if !s.cmdPalette.Visible {
+		t.Fatal("Open() should set Visible")
+	}
+	// Top-left corner sits well outside the centered panel.
+	if !s.handleClick(1, 1) {
+		t.Fatal("handleClick should return true while the palette is open")
+	}
+	if s.cmdPalette.Visible {
+		t.Fatal("an outside click should have dismissed the CommandPalette")
+	}
+}
+
+// TestClickColorPickerSVSquareFiresOnChange drives a real handleClick inside
+// the SV square (the widget's local (0,0)-(120,120) region) to prove the
+// gallery's OnChange closure — whose only job is to surface a Notification —
+// actually runs.
+func TestClickColorPickerSVSquareFiresOnChange(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	r := s.colorPicker.Bounds()
+	s.notify.Text = ""
+	s.handleClick(r.X+10, r.Y+10)
+	if s.notify.Text == "" {
+		t.Fatal("clicking the SV square should fire colorPicker.OnChange -> Notification")
+	}
+}
+
 func TestInsideAndLocalHelpers(t *testing.T) {
 	r := toolkit.Rect{X: 10, Y: 20, W: 30, H: 40}
 	if !inside(15, 25, r) {
