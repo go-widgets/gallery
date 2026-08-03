@@ -1,0 +1,176 @@
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// gallerymenu_test — the right-click edit context menu: hit-testing, per-widget
+// menu actions (with their guards), and dismissal / click routing.
+
+package main
+
+import (
+	"testing"
+
+	"github.com/go-widgets/toolkit"
+)
+
+// kanbanCardPoint returns a surface point inside card (col, i).
+func kanbanCardPoint(s *state, col, i int) (int, int) {
+	kr := s.kanban.Bounds()
+	colW := (kr.W - 2*toolkit.KanbanColGap) / 3
+	x := kr.X + col*(colW+toolkit.KanbanColGap) + toolkit.KanbanCardGap + 4
+	y := kr.Y + toolkit.KanbanHeaderH + toolkit.KanbanCardGap + i*(toolkit.KanbanCardH+toolkit.KanbanCardGap) + 4
+	return x, y
+}
+
+func TestContextMenuKanbanActions(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+
+	// Right-click "Design" (col 0, card 0) opens the menu.
+	x, y := kanbanCardPoint(s, 0, 0)
+	if !s.handleContext(x, y) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a card did not open the menu")
+	}
+	items := s.ctxMenu.Menu.Items
+
+	// Move left on column 0 is a guarded no-op.
+	items[0].Action()
+	if len(s.kanban.Columns[0].Cards) != 2 {
+		t.Fatalf("Move-left from col 0 mutated the board: %+v", s.kanban.Columns[0].Cards)
+	}
+	// Duplicate.
+	items[3].Action()
+	if len(s.kanban.Columns[0].Cards) != 3 || s.kanban.Columns[0].Cards[1].Title != "Design" {
+		t.Fatalf("Duplicate: %+v", s.kanban.Columns[0].Cards)
+	}
+	// Move right → column 1.
+	items[1].Action()
+	if s.kanban.Columns[1].Cards[len(s.kanban.Columns[1].Cards)-1].Title != "Design" {
+		t.Fatalf("Move-right did not append Design to col 1: %+v", s.kanban.Columns[1].Cards)
+	}
+	// Delete the (now duplicated) card at col 0, index 0.
+	before := len(s.kanban.Columns[0].Cards)
+	items[4].Action()
+	if len(s.kanban.Columns[0].Cards) != before-1 {
+		t.Fatalf("Delete did not remove a card: %d, want %d", len(s.kanban.Columns[0].Cards), before-1)
+	}
+
+	// Move right on the LAST column is a guarded no-op.
+	lx, ly := kanbanCardPoint(s, 2, 0)
+	s.handleContext(lx, ly)
+	doneBefore := len(s.kanban.Columns[2].Cards)
+	s.ctxMenu.Menu.Items[1].Action() // Move right →
+	if len(s.kanban.Columns[2].Cards) != doneBefore {
+		t.Fatalf("Move-right from last column mutated the board")
+	}
+}
+
+func TestContextMenuGanttActions(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	gr := s.gantt.Bounds()
+	rowY := gr.Y + toolkit.GanttHeaderH + 2 // task 0 "Design" Start 0 End 3
+	if !s.handleContext(gr.X+gr.W/2, rowY) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a task did not open the menu")
+	}
+	it := s.ctxMenu.Menu.Items
+	t0 := &s.gantt.Tasks[0]
+
+	it[0].Action() // Extend
+	if t0.End != 4 {
+		t.Fatalf("Extend: End=%d, want 4", t0.End)
+	}
+	it[1].Action() // Shrink
+	if t0.End != 3 {
+		t.Fatalf("Shrink: End=%d, want 3", t0.End)
+	}
+	it[2].Action() // Move right
+	if t0.Start != 1 || t0.End != 4 {
+		t.Fatalf("Move-right: %+v", *t0)
+	}
+	it[3].Action() // Move left
+	if t0.Start != 0 || t0.End != 3 {
+		t.Fatalf("Move-left: %+v", *t0)
+	}
+	it[3].Action() // Move left again — guarded (Start already 0)
+	if t0.Start != 0 {
+		t.Fatalf("Move-left past 0: Start=%d", t0.Start)
+	}
+	// Shrink down to the min span, then once more (guarded).
+	s.gantt.Tasks[0].Start, s.gantt.Tasks[0].End = 2, 3
+	it[1].Action()
+	if s.gantt.Tasks[0].End != 3 {
+		t.Fatalf("Shrink at min span changed End: %d", s.gantt.Tasks[0].End)
+	}
+	// Delete.
+	n := len(s.gantt.Tasks)
+	it[5].Action()
+	if len(s.gantt.Tasks) != n-1 {
+		t.Fatalf("Delete: %d tasks, want %d", len(s.gantt.Tasks), n-1)
+	}
+}
+
+func TestContextMenuAgendaAdd(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	ar := s.agenda.Bounds()
+	first := toolkit.WeekdayOfFirst(2026, 7)
+	idx := first + 15 // day 16
+	row, col := idx/7, idx%7
+	x := ar.X + col*ar.W/7 + (ar.W/7)/2
+	yy := ar.Y + toolkit.AgendaHeaderH + row*toolkit.AgendaDayCellH + toolkit.AgendaDayCellH/2
+	before := len(s.agenda.Events)
+	if !s.handleContext(x, yy) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a day did not open the menu")
+	}
+	s.ctxMenu.Menu.Items[0].Action() // Add event here
+	if len(s.agenda.Events) != before+1 {
+		t.Fatalf("Add-event: %d events, want %d", len(s.agenda.Events), before+1)
+	}
+	if got := s.agenda.Events[len(s.agenda.Events)-1]; got.D != 16 {
+		t.Fatalf("added event on day %d, want 16", got.D)
+	}
+}
+
+// TestContextMenuDismissAndRouting covers handleContext's dismiss path and
+// handleClick's ctxMenu-open branch.
+func TestContextMenuDismissAndRouting(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	x, y := kanbanCardPoint(s, 0, 0)
+	s.handleContext(x, y) // open
+
+	// A left click inside the menu activates a row and closes it.
+	mb := s.ctxMenu.MenuBounds()
+	if !s.handleClick(mb.X+mb.W/2, mb.Y+toolkit.MenuRowH/2) {
+		t.Fatal("handleClick inside menu returned false")
+	}
+	if s.ctxMenu.Open {
+		t.Fatal("menu did not close after activating a row")
+	}
+
+	// Re-open, then a right-click on empty space dismisses it.
+	s.handleContext(x, y)
+	if !s.handleContext(surfaceW/2, toolkit.MenuBarH+2) { // empty scaffold area
+		t.Fatal("dismiss of an open menu should report a change")
+	}
+	if s.ctxMenu.Open {
+		t.Fatal("menu not dismissed by an empty-space right-click")
+	}
+	// Right-click empty space with no menu open is a no-op (false).
+	if s.handleContext(surfaceW/2, toolkit.MenuBarH+2) {
+		t.Fatal("dismiss with no menu open should report no change")
+	}
+}
+
+// TestContextMenuKanbanMoveLeftAndGuards covers the actual Move-left (col>0) and
+// the defensive out-of-range guards in Duplicate / Delete.
+func TestContextMenuKanbanMoveLeftAndGuards(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	// Move left an actual card: col 1 "Build" → col 0.
+	s.kanbanMenu(1, 0).Items[0].Action()
+	if got := s.kanban.Columns[0].Cards[len(s.kanban.Columns[0].Cards)-1].Title; got != "Build" {
+		t.Fatalf("Move-left did not append Build to col 0: last=%q", got)
+	}
+	// Out-of-range card: Duplicate + Delete are guarded no-ops.
+	n0 := len(s.kanban.Columns[0].Cards)
+	s.kanbanMenu(0, 99).Items[3].Action() // Duplicate
+	s.kanbanMenu(0, 99).Items[4].Action() // Delete
+	if len(s.kanban.Columns[0].Cards) != n0 {
+		t.Fatalf("out-of-range guards mutated the board: %d, want %d", len(s.kanban.Columns[0].Cards), n0)
+	}
+}
