@@ -646,3 +646,107 @@ func TestInsideAndLocalHelpers(t *testing.T) {
 		t.Fatalf("local wrong: %+v", ev)
 	}
 }
+
+// TestKanbanCardDrag drives the scene's drag-capture routing end to end: a
+// press on card (0,0) grabs it, a drag into column 2 marks the gesture, and a
+// release drops it there -- moving the card and firing OnCardMove.
+func TestKanbanCardDrag(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	kr := s.kanban.Bounds()
+	colW := (kr.W - 2*toolkit.KanbanColGap) / 3
+	cardY := kr.Y + toolkit.KanbanHeaderH + toolkit.KanbanCardGap + 4
+
+	// Press on column 0, card 0 ("Design").
+	if !s.handleClick(kr.X+toolkit.KanbanCardGap+4, cardY) {
+		t.Fatal("handleClick(card) returned false")
+	}
+	if s.dragTarget == nil {
+		t.Fatal("press did not arm a drag target")
+	}
+	// Drag + release over column 2, slot 0.
+	col2X := kr.X + 2*(colW+toolkit.KanbanColGap) + toolkit.KanbanCardGap + 4
+	if !s.handleDrag(col2X, cardY) {
+		t.Fatal("handleDrag returned false with a target armed")
+	}
+	if !s.handleRelease(col2X, cardY) {
+		t.Fatal("handleRelease returned false with a target armed")
+	}
+	if s.dragTarget != nil {
+		t.Fatal("drag target not cleared after release")
+	}
+	if got := s.kanban.Columns[2].Cards[0].Title; got != "Design" {
+		t.Fatalf("after drag, column 2 card 0 = %q, want Design", got)
+	}
+	// Drag/release with nothing armed are no-ops.
+	if s.handleDrag(1, 1) || s.handleRelease(1, 1) {
+		t.Fatal("drag/release without a target should be no-ops")
+	}
+}
+
+// TestGanttBarDrag presses just inside task 0's bar, drags it right and
+// releases: the bar moves (Start increases) with its span preserved, firing
+// OnTaskChange.
+func TestGanttBarDrag(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	gr := s.gantt.Bounds()
+	axisW := gr.W - toolkit.GanttLabelW
+	units := 12 // auto-derived from the largest task End (Ship ends at 12)
+	barX := func(c int) int { return gr.X + toolkit.GanttLabelW + c*axisW/units }
+	rowY := gr.Y + toolkit.GanttHeaderH + 2 // task 0 ("Design", Start 0 End 3)
+	span0 := s.gantt.Tasks[0].End - s.gantt.Tasks[0].Start
+
+	// Press 8px inside the bar's left edge (past the ~5px resize slop) -> move.
+	s.handleClick(barX(0)+8, rowY)
+	if s.dragTarget == nil {
+		t.Fatal("press on a bar did not arm a drag target")
+	}
+	s.handleDrag(barX(9), rowY)
+	s.handleRelease(barX(9), rowY)
+
+	if s.gantt.Tasks[0].Start <= 0 {
+		t.Fatalf("bar did not move: Start=%d", s.gantt.Tasks[0].Start)
+	}
+	if got := s.gantt.Tasks[0].End - s.gantt.Tasks[0].Start; got != span0 {
+		t.Fatalf("span changed on move: got %d, want %d", got, span0)
+	}
+}
+
+// TestAgendaSwitcherChangesView clicks the "Week" segment of the Agenda view
+// switcher and checks the Agenda's View follows.
+func TestAgendaSwitcherChangesView(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	ar := s.agendaSwitcher.Bounds()
+	s.handleClick(ar.X+ar.W/8, ar.Y+ar.H/2) // segment 0 centre ("Week")
+	if s.agenda.View != toolkit.AgendaWeek {
+		t.Fatalf("Agenda view = %d, want AgendaWeek (%d)", s.agenda.View, toolkit.AgendaWeek)
+	}
+}
+
+// TestAgendaAddEvent clicks an empty in-month day cell and checks a new event
+// is appended (exercising OnDayActivate + itoa).
+func TestAgendaAddEvent(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	ar := s.agenda.Bounds()
+	before := len(s.agenda.Events)
+
+	first := toolkit.WeekdayOfFirst(2026, 7)
+	idx := first + 14 // day 15 (no seeded event)
+	row, col := idx/7, idx%7
+	cellX := ar.X + col*ar.W/7 + (ar.W/7)/2
+	cellY := ar.Y + toolkit.AgendaHeaderH + row*toolkit.AgendaDayCellH + toolkit.AgendaDayCellH/2
+	s.handleClick(cellX, cellY)
+
+	if len(s.agenda.Events) != before+1 {
+		t.Fatalf("events after day click = %d, want %d", len(s.agenda.Events), before+1)
+	}
+	if got := s.agenda.Events[len(s.agenda.Events)-1]; got.D != 15 || got.M != 7 {
+		t.Fatalf("added event on %d/%d, want 7/15", got.M, got.D)
+	}
+}
+
+// TestItoa spot-checks the local itoa helper.
+func TestItoa(t *testing.T) {
+	if itoa(0) != "0" || itoa(42) != "42" || itoa(-7) != "-7" {
+		t.Fatalf("itoa: %q %q %q", itoa(0), itoa(42), itoa(-7))
+	}
+}

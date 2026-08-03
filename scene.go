@@ -6,9 +6,15 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/go-widgets/painter"
 	"github.com/go-widgets/toolkit"
 )
+
+// itoa is strconv.Itoa under a short name, matching the toolkit's own helper
+// so the interactivity callbacks read compactly.
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
@@ -162,14 +168,25 @@ type state struct {
 	// Area/Scatter/Radar charts) go into the three columns; the wide ones
 	// (Agenda month view, Kanban board, Gantt chart) go into a full-width
 	// band below the column grid (colWide).
-	sparkLine    *toolkit.Sparkline
-	sparkBar     *toolkit.Sparkline
-	areaChart    *toolkit.AreaChart
-	scatterChart *toolkit.ScatterChart
-	radarChart   *toolkit.RadarChart
-	agenda       *toolkit.Agenda
-	kanban       *toolkit.Kanban
-	gantt        *toolkit.Gantt
+	sparkLine      *toolkit.Sparkline
+	sparkBar       *toolkit.Sparkline
+	areaChart      *toolkit.AreaChart
+	scatterChart   *toolkit.ScatterChart
+	radarChart     *toolkit.RadarChart
+	agenda         *toolkit.Agenda
+	agendaSwitcher *toolkit.ViewSwitcher
+	kanban         *toolkit.Kanban
+	gantt          *toolkit.Gantt
+
+	// addedEvents counts events the user adds by clicking empty Agenda days,
+	// so each new event gets a distinct label.
+	addedEvents int
+
+	// Drag capture: the dashboard widget grabbed on press (a Kanban card or a
+	// Gantt bar), with its surface bounds, so EventMouseDrag / EventMouseUp
+	// route back to it in its own local coordinates even as the pointer leaves.
+	dragTarget toolkit.Widget
+	dragBounds toolkit.Rect
 
 	// App-shell demo: a Border with a COLLAPSIBLE sidebar (a Frame.Collapsible
 	// in the West region) and a draggable splitter GRIP (Border.WestSplit),
@@ -734,6 +751,22 @@ func newState(w, _ int) *state {
 	})
 	s.agenda.View = toolkit.AgendaMonth
 	s.agenda.Year, s.agenda.Month = 2026, 7
+	// Clicking an empty in-month day adds an event there (v0.83 interactivity).
+	s.agenda.OnDayActivate = func(y, m, d int) {
+		s.addedEvents++
+		s.agenda.Events = append(s.agenda.Events, toolkit.AgendaEvent{
+			Title: "New " + itoa(s.addedEvents), Y: y, M: m, D: d,
+			Fill: toolkit.RGB(0x7a, 0x5a, 0xf0),
+		})
+		s.showNotify("Added event on " + itoa(m) + "/" + itoa(d))
+	}
+	// A four-segment switcher drives the Agenda's view (Week/Month/Quarter/Year),
+	// whose enum matches these indices 0..3.
+	s.agendaSwitcher = toolkit.NewViewSwitcher([]string{"Week", "Month", "Quarter", "Year"}, int(toolkit.AgendaMonth))
+	s.agendaSwitcher.OnChange = func(i int) {
+		s.agenda.View = toolkit.AgendaView(i)
+		s.showNotify("Agenda view: " + s.agendaSwitcher.Views[i])
+	}
 
 	s.kanban = toolkit.NewKanban([]toolkit.KanbanColumn{
 		{Title: "To Do", Cards: []toolkit.KanbanCard{
@@ -753,6 +786,14 @@ func newState(w, _ int) *state {
 		{Label: "Ship", Start: 10, End: 12, Fill: toolkit.RGB(0x1e, 0x9e, 0x52)},
 	})
 	s.gantt.Selected = 1 // highlight the "Build" task
+	// Drag a card between columns (v0.83 interactivity).
+	s.kanban.OnCardMove = func(fromCol, fromCard, toCol, toIdx int) {
+		s.showNotify("Moved card to " + s.kanban.Columns[toCol].Title)
+	}
+	// Drag a bar to move it or its edges to resize (v0.83 interactivity).
+	s.gantt.OnTaskChange = func(i, start, end int) {
+		s.showNotify(s.gantt.Tasks[i].Label + ": " + itoa(start) + "→" + itoa(end))
+	}
 
 	// App-shell: collapsible sidebar (Frame.Collapsible in a Border West
 	// region) + splitter grips (Border.WestSplit + the Paned handle).
@@ -876,9 +917,10 @@ func newState(w, _ int) *state {
 	// column, so they stack in a full-bleed VBox under the 3-column grid.
 	fShell, hShell := sectionFrame("App shell — collapsible sidebar + splitter grips (v0.63)", sectGap,
 		boxItem{s.appBorder, 130})
-	fAgenda, hAgenda := sectionFrame("Agenda — month view (v0.82)", sectGap, boxItem{s.agenda, 300})
-	fKanban, hKanban := sectionFrame("Kanban board (v0.82)", sectGap, boxItem{s.kanban, 190})
-	fGantt, hGantt := sectionFrame("Gantt chart (v0.82)", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
+	fAgenda, hAgenda := sectionFrame("Agenda (v0.83) — switch views above, click an empty day to add", sectGap,
+		boxItem{s.agendaSwitcher, 28}, boxItem{s.agenda, 272})
+	fKanban, hKanban := sectionFrame("Kanban board (v0.83) — drag a card between columns", sectGap, boxItem{s.kanban, 190})
+	fGantt, hGantt := sectionFrame("Gantt chart (v0.83) — drag a bar to move it, its edges to resize", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
 	var totalWide int
 	s.colWide, totalWide = column(
 		[]*toolkit.Frame{fShell, fAgenda, fKanban, fGantt},
@@ -934,6 +976,9 @@ func newState(w, _ int) *state {
 		// Full-width band — the app-shell Border routes clicks to its
 		// collapsible sidebar (title toggles collapse) + the Paned grip.
 		s.appBorder,
+		// Interactive Wave 7 widgets (v0.83): the Agenda view switcher + the
+		// Agenda (day-activate), and the drag-editable Kanban and Gantt.
+		s.agendaSwitcher, s.agenda, s.kanban, s.gantt,
 	}
 
 	return s
@@ -1037,14 +1082,41 @@ func (s *state) handleClick(x, y int) bool {
 		return true
 	}
 
-	// Dashboard clickables — first hit wins (draw-order = z-order).
+	// Dashboard clickables — first hit wins (draw-order = z-order). The hit
+	// widget also becomes the drag-capture target so a following
+	// EventMouseDrag / EventMouseUp routes back to it (Kanban card / Gantt bar).
 	for _, w := range s.clickables {
 		r := w.Bounds()
 		if inside(x, y, r) {
+			s.dragTarget, s.dragBounds = w, r
 			w.OnEvent(local(ev, r))
 			return true
 		}
 	}
+	s.dragTarget = nil
+	return true
+}
+
+// handleDrag routes a pointer move (with the button held) to the widget grabbed
+// on press, as an EventMouseDrag in that widget's local coordinates. It reports
+// whether a captured widget consumed it (so the host re-renders).
+func (s *state) handleDrag(x, y int) bool {
+	if s.dragTarget == nil {
+		return false
+	}
+	s.dragTarget.OnEvent(toolkit.Event{Kind: toolkit.EventMouseDrag, X: x - s.dragBounds.X, Y: y - s.dragBounds.Y})
+	return true
+}
+
+// handleRelease routes a button release to the captured widget as an
+// EventMouseUp (its local coordinates), then drops the capture. It reports
+// whether a captured widget consumed it.
+func (s *state) handleRelease(x, y int) bool {
+	if s.dragTarget == nil {
+		return false
+	}
+	s.dragTarget.OnEvent(toolkit.Event{Kind: toolkit.EventMouseUp, X: x - s.dragBounds.X, Y: y - s.dragBounds.Y})
+	s.dragTarget = nil
 	return true
 }
 
