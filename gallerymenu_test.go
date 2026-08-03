@@ -195,34 +195,34 @@ func TestContextMenuListActions(t *testing.T) {
 
 	first := s.listBox.Items[0]
 	// Move down (item 0 -> 1).
-	s.listMenu(0).Items[1].Action()
+	s.listMenu(s.listBox, 0).Items[1].Action()
 	if s.listBox.Items[1] != first {
 		t.Fatalf("Move-down did not swap: %v", s.listBox.Items[:2])
 	}
 	// Move up (item 1 -> 0) restores it.
-	s.listMenu(1).Items[0].Action()
+	s.listMenu(s.listBox, 1).Items[0].Action()
 	if s.listBox.Items[0] != first {
 		t.Fatalf("Move-up did not swap back: %v", s.listBox.Items[:2])
 	}
 	// Guarded no-ops at the ends.
 	n := len(s.listBox.Items)
-	s.listMenu(0).Items[0].Action()     // Move up at top
-	s.listMenu(n - 1).Items[1].Action() // Move down at bottom
+	s.listMenu(s.listBox, 0).Items[0].Action()   // Move up at top
+	s.listMenu(s.listBox, n-1).Items[1].Action() // Move down at bottom
 	if len(s.listBox.Items) != n {
 		t.Fatal("end guards mutated the list length")
 	}
 	// Duplicate then delete.
-	s.listMenu(0).Items[3].Action()
+	s.listMenu(s.listBox, 0).Items[3].Action()
 	if len(s.listBox.Items) != n+1 {
 		t.Fatalf("Duplicate: %d, want %d", len(s.listBox.Items), n+1)
 	}
-	s.listMenu(0).Items[4].Action()
+	s.listMenu(s.listBox, 0).Items[4].Action()
 	if len(s.listBox.Items) != n {
 		t.Fatalf("Delete: %d, want %d", len(s.listBox.Items), n)
 	}
 	// Out-of-range index: every action is a guarded no-op.
 	for _, k := range []int{0, 1, 3, 4} {
-		s.listMenu(999).Items[k].Action()
+		s.listMenu(s.listBox, 999).Items[k].Action()
 	}
 	if len(s.listBox.Items) != n {
 		t.Fatal("out-of-range list actions mutated the list")
@@ -237,27 +237,27 @@ func TestContextMenuTableActions(t *testing.T) {
 	}
 
 	first := append([]string(nil), s.table.Rows[0]...)
-	s.tableMenu(0).Items[1].Action() // Move down
+	s.tableMenu(s.table, 0).Items[1].Action() // Move down
 	if s.table.Rows[1][0] != first[0] {
 		t.Fatalf("Move-down did not swap rows")
 	}
-	s.tableMenu(1).Items[0].Action() // Move up
+	s.tableMenu(s.table, 1).Items[0].Action() // Move up
 	if s.table.Rows[0][0] != first[0] {
 		t.Fatalf("Move-up did not swap back")
 	}
 	n := len(s.table.Rows)
-	s.tableMenu(0).Items[0].Action()     // Move up at top (guard)
-	s.tableMenu(n - 1).Items[1].Action() // Move down at bottom (guard)
-	s.tableMenu(0).Items[3].Action()     // Duplicate
+	s.tableMenu(s.table, 0).Items[0].Action()   // Move up at top (guard)
+	s.tableMenu(s.table, n-1).Items[1].Action() // Move down at bottom (guard)
+	s.tableMenu(s.table, 0).Items[3].Action()   // Duplicate
 	if len(s.table.Rows) != n+1 {
 		t.Fatalf("Duplicate: %d rows, want %d", len(s.table.Rows), n+1)
 	}
-	s.tableMenu(0).Items[4].Action() // Delete
+	s.tableMenu(s.table, 0).Items[4].Action() // Delete
 	if len(s.table.Rows) != n {
 		t.Fatalf("Delete: %d rows, want %d", len(s.table.Rows), n)
 	}
 	for _, k := range []int{0, 1, 3, 4} {
-		s.tableMenu(999).Items[k].Action()
+		s.tableMenu(s.table, 999).Items[k].Action()
 	}
 	if len(s.table.Rows) != n {
 		t.Fatal("out-of-range table actions mutated the rows")
@@ -272,7 +272,7 @@ func TestContextMenuTreeActions(t *testing.T) {
 	}
 
 	// Root menu: Add child + Toggle expand, but NO delete.
-	rootMenu := s.treeMenu(s.tree.Root)
+	rootMenu := s.treeMenu(s.tree, s.tree.Root)
 	if !menuHasLabel(rootMenu, "Add child") || !menuHasLabel(rootMenu, "Toggle expand") {
 		t.Fatal("root menu missing Add child / Toggle expand")
 	}
@@ -292,7 +292,7 @@ func TestContextMenuTreeActions(t *testing.T) {
 
 	// A freshly-added leaf (no children, not root): Add child + Delete, no Toggle.
 	leaf := s.tree.Root.Children[len(s.tree.Root.Children)-1]
-	leafMenu := s.treeMenu(leaf)
+	leafMenu := s.treeMenu(s.tree, leaf)
 	if menuHasLabel(leafMenu, "Toggle expand") {
 		t.Fatal("leaf menu must not offer Toggle expand")
 	}
@@ -309,5 +309,49 @@ func TestContextMenuTreeActions(t *testing.T) {
 		if c == leaf {
 			t.Fatal("Delete node did not detach the leaf")
 		}
+	}
+}
+
+// TestContextMenuOtherInstances proves the generic dispatch reaches the SECOND
+// ListBox (dataView) and Table (gridEdit) instances, not just the first.
+func TestContextMenuOtherInstances(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+
+	dr := s.dataView.Bounds()
+	if !s.handleContext(dr.X+5, dr.Y+2) || !s.ctxMenu.Open {
+		t.Fatal("right-click on dataView (2nd ListBox) did not open a menu")
+	}
+	// Deleting through the menu mutates dataView, not listBox.
+	n := len(s.dataView.Items)
+	m := len(s.listBox.Items)
+	s.listMenu(s.dataView, 0).Items[4].Action() // Delete
+	if len(s.dataView.Items) != n-1 {
+		t.Fatalf("dataView delete: %d, want %d", len(s.dataView.Items), n-1)
+	}
+	if len(s.listBox.Items) != m {
+		t.Fatal("editing dataView must not touch listBox")
+	}
+
+	gr := s.gridEdit.Bounds()
+	// gridEdit is grouped, so its first visual line is a group header (RowAt
+	// == -1); scan down to the first real data-row line.
+	gy, found := 0, false
+	for line := 0; line < 10; line++ {
+		yy := toolkit.TableHeaderHeight + line*toolkit.TableRowHeight + 2
+		if s.gridEdit.RowAt(5, yy) >= 0 {
+			gy, found = gr.Y+yy, true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no data row found in gridEdit")
+	}
+	if !s.handleContext(gr.X+5, gy) || !s.ctxMenu.Open {
+		t.Fatal("right-click on gridEdit (2nd Table) did not open a menu")
+	}
+	gn := len(s.gridEdit.Rows)
+	s.tableMenu(s.gridEdit, 0).Items[4].Action() // Delete row
+	if len(s.gridEdit.Rows) != gn-1 {
+		t.Fatalf("gridEdit delete: %d, want %d", len(s.gridEdit.Rows), gn-1)
 	}
 }
