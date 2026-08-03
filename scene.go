@@ -73,11 +73,8 @@ type state struct {
 	colorChoose *toolkit.ColorChooser
 
 	// Column C — Selection & Structure.
-	listLabel *toolkit.Label
 	listBox   *toolkit.ListBox
-	treeLabel *toolkit.Label
 	tree      *toolkit.TreeView
-	expLabel  *toolkit.Label
 	expander  *toolkit.Expander
 	frameHost *toolkit.Frame
 
@@ -86,8 +83,7 @@ type state struct {
 	// each column empty).
 	notebook *toolkit.Notebook
 
-	panedLabel *toolkit.Label
-	paned      *toolkit.Paned
+	paned *toolkit.Paned
 
 	// Column-A Wave 1 (v0.7) highlights.
 	swtch *toolkit.Switch
@@ -102,7 +98,6 @@ type state struct {
 	diff      *toolkit.Diff
 
 	// Column-C Wave 3 (v0.9) highlights.
-	wave3Label     *toolkit.Label
 	stat           *toolkit.Stat
 	timeline       *toolkit.Timeline
 	chip           *toolkit.Chip
@@ -124,9 +119,8 @@ type state struct {
 	// Column-C Wave 4 (v0.33) highlights: a Table with a right-aligned
 	// numeric column (TableColumn.Align) + a horizontal Timeline ribbon
 	// (Timeline.Horizontal).
-	wave4LabelC *toolkit.Label
-	table       *toolkit.Table
-	timelineH   *toolkit.Timeline
+	table     *toolkit.Table
+	timelineH *toolkit.Timeline
 
 	// Column-A Wave 5 (v0.42) highlights: Accordion (collapsible
 	// sections), ColorPicker (HSV square + hue/alpha sliders) and
@@ -146,22 +140,20 @@ type state struct {
 	// TreeTable (Table-shaped grid with nesting). A CommandPalette is
 	// wired as a canvas-wide overlay, opened from a trigger Button here
 	// and drawn last (like Notification) so it floats above everything.
-	wave5LabelC *toolkit.Label
-	wizard      *toolkit.Wizard
-	treeTable   *toolkit.TreeTable
-	paletteBtn  *toolkit.Button
-	cmdPalette  *toolkit.CommandPalette
+	wizard     *toolkit.Wizard
+	treeTable  *toolkit.TreeTable
+	paletteBtn *toolkit.Button
+	cmdPalette *toolkit.CommandPalette
 
 	// Wave 6 (v0.81) highlights — the Table grid-editing family + the
 	// widgets it enabled. Column A: a PropertyGrid (editable Name/Value)
 	// above a PagingToolbar. Column B: a Table showing grouped rows + an
 	// open inline cell editor. Column C: a ListBox with a DataView
 	// ItemRenderer painting rich two-line rows.
-	propGrid    *toolkit.PropertyGrid
-	pagingBar   *toolkit.PagingToolbar
-	gridEdit    *toolkit.Table
-	wave6LabelC *toolkit.Label
-	dataView    *toolkit.ListBox
+	propGrid  *toolkit.PropertyGrid
+	pagingBar *toolkit.PagingToolbar
+	gridEdit  *toolkit.Table
+	dataView  *toolkit.ListBox
 
 	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
 	// Each segment installs a distinct palette so the whole scene
@@ -180,23 +172,17 @@ type state struct {
 	// draw() renders the whole column with a single colA.Draw.
 	colA *toolkit.VBox
 	// colB is Column B composed with the box-layout system (same structure as
-	// colA). Columns A/B are box-laid; Column C migrates in a follow-up.
+	// colA).
 	colB *toolkit.VBox
+	// colC is Column C composed with the box-layout system. All three columns
+	// are now box-laid -- the gallery no longer hand-computes any body rects.
+	colC *toolkit.VBox
 
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
 	clickables []toolkit.Widget
-
-	// Card outlines painted underneath the widgets. Each rect covers
-	// one section — the GTK4 widget-factory pattern of a bordered
-	// group. Recorded during layout in newState, stroked in draw().
-	cards []toolkit.Rect
 }
-
-// cardPad is the extra pixels a card extends past its inner-most
-// widget rect on every side. Kept small so cards feel tight.
-const cardPad = 6
 
 // frameChromeH is the vertical space a titled Frame adds around its child:
 // the 1px top+bottom border, the FrameTitleH title bar and the default 4px
@@ -438,25 +424,8 @@ func newState(w, h int) *state {
 
 	s.colorChoose = toolkit.NewColorChooser(toolkit.RGB(0x0d, 0x94, 0x88))
 
-	// --- Column C: Selection & Structure ---------------------------------
-
-	yC := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
-	cardStartC := yC
-
-	s.listLabel = toolkit.NewLabel("ListBox")
-	s.listLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
+	// --- Column C widgets — CONSTRUCTION ONLY (placement owned by colC) ---
 	s.listBox = toolkit.NewListBox([]string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"})
-	s.listBox.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 130})
-	yC += 130
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
-	yC += sectPad
-	cardStartC = yC
-
-	s.treeLabel = toolkit.NewLabel("TreeView")
-	s.treeLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
 
 	s.tree = toolkit.NewTreeView(&toolkit.TreeNode{
 		Label: "/", Expanded: true, Children: []*toolkit.TreeNode{
@@ -467,39 +436,15 @@ func newState(w, h int) *state {
 			{Label: "README.md"},
 		},
 	})
-	s.tree.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 190})
-	yC += 190
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
-	yC += sectPad
-	cardStartC = yC
 
-	s.expLabel = toolkit.NewLabel("Expander + Frame")
-	s.expLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
-	// Expander wraps a Frame that hosts a Label — showcases layout
-	// composition (Container → Container → leaf) without needing a
-	// second-level interactive path.
+	// Expander wraps a Frame that hosts a Label — layout composition
+	// (Expander → Frame → leaf).
 	frameLabel := toolkit.NewLabel("nested widget inside Frame")
 	s.frameHost = toolkit.NewFrame(frameLabel)
 	s.expander = toolkit.NewExpander("Details", s.frameHost)
 	s.expander.Expanded = true
-	s.expander.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 88})
-	yC += 88
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
-	yC += sectPad
-	cardStartC = yC
 
-	s.panedLabel = toolkit.NewLabel("Paned (horizontal split)")
-	s.panedLabel.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
-	// Paned demo: horizontal split hosting two Labels. Paned.SetBounds
-	// centres the handle on first sizing, so no manual Position is needed.
 	s.paned = toolkit.NewHPaned(toolkit.NewLabel("left pane"), toolkit.NewLabel("right pane"))
-	s.paned.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 60})
-	yC += 60
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- Column A extension: Wave 1 (v0.7) — construction only ----------
 	s.swtch = toolkit.NewSwitch(true)
@@ -558,57 +503,33 @@ func newState(w, h int) *state {
 	s.dropdownUp = toolkit.NewDropDown([]string{"Opens upward", "OpenUp = true"}, 0)
 	s.dropdownUp.OpenUp = true
 
-	// --- Column C extension: Wave 3 (v0.9) highlights -------------------
-
-	yC += sectPad
-	cardStartC = yC
-
-	s.wave3Label = toolkit.NewLabel("Wave 3 (v0.9)")
-	s.wave3Label.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
+	// --- Column C extension: Wave 3 (v0.9) — construction only ----------
+	//
+	// Stat + ProgressCircle sit side by side, then a Timeline, then Chip +
+	// SplitButton side by side; colC arranges the rows via HBox.
 	s.stat = toolkit.NewStat("Requests / min", "12,845")
 	s.stat.Change = "+8.3%"
 	s.stat.Trend = toolkit.StatUp
-	s.stat.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW/2 - 2, H: 60})
 	s.progressCircle = toolkit.NewProgressCircle()
 	s.progressCircle.Fraction = 0.66
-	s.progressCircle.SetBounds(toolkit.Rect{X: colCX + colW/2 + 2, Y: yC, W: colW/2 - 2, H: 60})
-	yC += 60 + sectGap
 
 	s.timeline = toolkit.NewTimeline([]toolkit.TimelineEvent{
 		{Title: "PR opened", Kind: toolkit.TimelineDefault},
 		{Title: "Reviewed", Detail: "LGTM", Kind: toolkit.TimelineSuccess},
 		{Title: "Build failed", Kind: toolkit.TimelineError},
 	})
-	s.timeline.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 68})
-	yC += 68 + sectGap
 
 	s.chip = toolkit.NewChip("frontend")
 	s.chip.Closable = true
 	s.chip.OnClose = func() { s.showNotify("Chip closed") }
-	s.chip.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: 96, H: 22})
 	s.splitButton = toolkit.NewSplitButton("Deploy",
 		func() { s.showNotify("SplitButton: Deploy") })
 	s.splitButton.OnArrow = func() { s.showNotify("SplitButton: arrow menu") }
-	s.splitButton.SetBounds(toolkit.Rect{X: colCX + 104, Y: yC, W: colW - 104, H: 22})
-	yC += 22
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
-	// --- Column C extension: Wave 4 (v0.33) highlights -------------------
+	// --- Column C extension: Wave 4 (v0.33) — construction only ---------
 	//
-	// A Table with its numeric column right-aligned (TableColumn.Align =
-	// AlignRight) sits above a horizontal Timeline ribbon (Timeline.
-	// Horizontal = true) — the same event log as the vertical Timeline
-	// above, rotated onto the layout axis a status ribbon would use.
-
-	yC += sectPad
-	cardStartC = yC
-
-	s.wave4LabelC = toolkit.NewLabel("Wave 4 (v0.33)")
-	s.wave4LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
+	// A Table with its numeric column right-aligned above a horizontal
+	// Timeline ribbon (Timeline.Horizontal = true).
 	s.table = toolkit.NewTable(
 		[]toolkit.TableColumn{
 			{Title: "Widget"},
@@ -620,9 +541,6 @@ func newState(w, h int) *state {
 			{"Charts", "3"},
 		},
 	)
-	tableH := toolkit.TableHeaderHeight + 3*toolkit.TableRowHeight
-	s.table.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: tableH})
-	yC += tableH + sectGap
 
 	s.timelineH = toolkit.NewTimeline([]toolkit.TimelineEvent{
 		{Title: "Init", Kind: toolkit.TimelineDefault},
@@ -630,9 +548,6 @@ func newState(w, h int) *state {
 		{Title: "Deploy", Kind: toolkit.TimelineWarning},
 	})
 	s.timelineH.Horizontal = true
-	s.timelineH.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 36})
-	yC += 36
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- Column A extension: Wave 5 (v0.42) — construction only ---------
 	//
@@ -668,27 +583,15 @@ func newState(w, h int) *state {
 	s.dateRange.Start = toolkit.Date{Y: 2026, M: 7, D: 10}
 	s.dateRange.End = toolkit.Date{Y: 2026, M: 7, D: 17}
 
-	// --- Column C extension: Wave 5 (v0.42) highlights -------------------
+	// --- Column C extension: Wave 5 (v0.42) — construction only ---------
 	//
-	// Wizard (multi-step Plan → Build → Ship flow) sits above a TreeTable
-	// (Table-shaped grid with nesting) and a trigger Button that opens the
-	// CommandPalette overlay constructed up in newState's top scaffold.
-
-	yC += sectPad
-	cardStartC = yC
-
-	s.wave5LabelC = toolkit.NewLabel("Wave 5 (v0.42)")
-	s.wave5LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
+	// Wizard (multi-step flow) above a TreeTable (nested grid) and a trigger
+	// Button that opens the CommandPalette overlay.
 	s.wizard = toolkit.NewWizard([]toolkit.WizardStep{
 		{Title: "Plan", Body: toolkit.NewLabel("Sketch the release scope.")},
 		{Title: "Build", Body: toolkit.NewLabel("Wire the new widgets in.")},
 		{Title: "Ship", Body: toolkit.NewLabel("Tag + publish the gallery.")},
 	})
-	const wizardH = toolkit.WizardStripH + 40 + toolkit.WizardButtonRowH
-	s.wizard.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: wizardH})
-	yC += wizardH + sectGap
 
 	s.treeTable = toolkit.NewTreeTable(
 		[]toolkit.TreeTableColumn{
@@ -705,14 +608,8 @@ func newState(w, h int) *state {
 			}},
 		},
 	)
-	const treeTableH = toolkit.TreeTableHeaderHeight + 4*toolkit.TreeTableRowHeight
-	s.treeTable.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: treeTableH})
-	yC += treeTableH + sectGap
 
 	s.paletteBtn = toolkit.NewButton("Open command palette ⌘", func() { s.cmdPalette.Open() })
-	s.paletteBtn.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: 28})
-	yC += 28
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- Column A extension: Wave 6 (v0.81) — construction only ---------
 	//
@@ -753,18 +650,10 @@ func newState(w, h int) *state {
 	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: 130, Y: toolkit.TableHeaderHeight + toolkit.TableRowHeight + 2})
 	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventChar, Code: "!"})
 
-	// --- Column C extension: Wave 6 (v0.81) highlights -------------------
+	// --- Column C extension: Wave 6 (v0.81) — construction only ---------
 	//
 	// A ListBox with a DataView ItemRenderer: each row draws a colour
 	// swatch + a two-line title/subtitle instead of the default text.
-
-	yC += sectPad
-	cardStartC = yC
-
-	s.wave6LabelC = toolkit.NewLabel("Wave 6 (v0.81)")
-	s.wave6LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
-	yC += toolkit.GlyphHeight() + sectGap
-
 	dvSubs := []string{"12 unread · 2m ago", "3 unread · 1h ago", "all read · yesterday", "8 unread · 5m ago"}
 	dvSwatch := []toolkit.RGBA{toolkit.RGB(0xe0, 0x50, 0x50), toolkit.RGB(0x50, 0xa0, 0xe0), toolkit.RGB(0x50, 0xb0, 0x70), toolkit.RGB(0xc0, 0x80, 0xe0)}
 	s.dataView = toolkit.NewListBox([]string{"Reddit", "Hacker News", "Lobsters", "GitHub"})
@@ -785,10 +674,6 @@ func newState(w, h int) *state {
 		sub.SetBounds(toolkit.Rect{X: rc.X + 28, Y: rc.Y + 18, W: rc.W - 32, H: 12})
 		sub.Draw(p, theme)
 	}
-	const dataViewH = 4 * 32
-	s.dataView.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: dataViewH})
-	yC += dataViewH
-	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
 	// --- Column A, re-composed with the box-layout system ----------------
 	//
@@ -857,6 +742,32 @@ func newState(w, h int) *state {
 		[]int{hText, hCal, hColor, hWave2, hWave4B, hWave5B, hWave6B})
 	s.colB.SetBounds(toolkit.Rect{X: colBX, Y: colATop, W: colW, H: totalB})
 
+	// --- Column C, re-composed with the box-layout system ----------------
+	tableH6 := toolkit.TableHeaderHeight + 3*toolkit.TableRowHeight
+	wizardH6 := toolkit.WizardStripH + 40 + toolkit.WizardButtonRowH
+	treeTableH6 := toolkit.TreeTableHeaderHeight + 4*toolkit.TreeTableRowHeight
+	dataViewH6 := 4 * 32
+
+	fList, hList := sectionFrame("ListBox", sectGap, boxItem{s.listBox, 130})
+	fTree, hTree := sectionFrame("TreeView", sectGap, boxItem{s.tree, 190})
+	fExp, hExp := sectionFrame("Expander + Frame", sectGap, boxItem{s.expander, 88})
+	fPaned, hPaned := sectionFrame("Paned (horizontal split)", sectGap, boxItem{s.paned, 60})
+	fWave3, hWave3 := sectionFrame("Wave 3 (v0.9)", sectGap,
+		boxItem{hrowFlex(4, s.stat, s.progressCircle), 60},
+		boxItem{s.timeline, 68},
+		boxItem{hrowFixedFlex(8, 96, s.chip, s.splitButton), 22})
+	fWave4C, hWave4C := sectionFrame("Wave 4 (v0.33)", sectGap,
+		boxItem{s.table, tableH6}, boxItem{s.timelineH, 36})
+	fWave5C, hWave5C := sectionFrame("Wave 5 (v0.42)", sectGap,
+		boxItem{s.wizard, wizardH6}, boxItem{s.treeTable, treeTableH6}, boxItem{s.paletteBtn, 28})
+	fWave6C, hWave6C := sectionFrame("Wave 6 (v0.81)", sectGap, boxItem{s.dataView, dataViewH6})
+
+	var totalC int
+	s.colC, totalC = column(
+		[]*toolkit.Frame{fList, fTree, fExp, fPaned, fWave3, fWave4C, fWave5C, fWave6C},
+		[]int{hList, hTree, hExp, hPaned, hWave3, hWave4C, hWave5C, hWave6C})
+	s.colC.SetBounds(toolkit.Rect{X: colCX, Y: colATop, W: colW, H: totalC})
+
 	// --- click routing table --------------------------------------------
 
 	s.clickables = []toolkit.Widget{
@@ -907,17 +818,6 @@ func (s *state) showNotify(text string) {
 	s.notify.AnchorIn(toolkit.Rect{X: 0, Y: 0, W: s.w, H: s.h - toolkit.StatusbarH}, toolkit.BottomRight)
 }
 
-// pushCard records the outer rectangle of a section — extended by
-// cardPad on every side so the border sits comfortably around the
-// widgets. draw() strokes these before painting widgets so the
-// widget bodies land on top of the border.
-func (s *state) pushCard(x, y, w, h int) {
-	s.cards = append(s.cards, toolkit.Rect{
-		X: x - cardPad, Y: y - cardPad,
-		W: w + 2*cardPad, H: h + 2*cardPad,
-	})
-}
-
 // draw paints the whole dashboard onto buf. Buf is an RGBA row-major
 // slice — buf and s.w/s.h are wrapped in a PixelPainter so the widget
 // code sees only the painter.Painter interface. Draw order matters:
@@ -927,14 +827,6 @@ func (s *state) pushCard(x, y, w, h int) {
 func (s *state) draw(buf []byte) {
 	fillBG(buf, s.w, s.h, s.theme.Background)
 	p := painter.NewPixelPainter(buf, s.w, s.h)
-
-	// Card outlines — a subtle 1-px Border stroke around each widget
-	// group (GTK4 widget-factory pattern). Painted before the widgets
-	// so widget bodies overlap the border on top.
-	for _, r := range s.cards {
-		p.FillRect(painter.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, s.theme.Surface)
-		p.StrokeRect(painter.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, s.theme.Border, 1)
-	}
 
 	// Top scaffold.
 	s.menuBar.Draw(p, s.theme)
@@ -952,38 +844,9 @@ func (s *state) draw(buf []byte) {
 	// section Labels and card borders.
 	s.colB.Draw(p, s.theme)
 
-	// Column C — Selection & Structure.
-	s.listLabel.Draw(p, s.theme)
-	s.listBox.Draw(p, s.theme)
-	s.treeLabel.Draw(p, s.theme)
-	s.tree.Draw(p, s.theme)
-	s.expLabel.Draw(p, s.theme)
-	s.expander.Draw(p, s.theme)
-	s.panedLabel.Draw(p, s.theme)
-	s.paned.Draw(p, s.theme)
-
-	// Column C — Wave 3 (v0.9) highlights.
-	s.wave3Label.Draw(p, s.theme)
-	s.stat.Draw(p, s.theme)
-	s.progressCircle.Draw(p, s.theme)
-	s.timeline.Draw(p, s.theme)
-	s.chip.Draw(p, s.theme)
-	s.splitButton.Draw(p, s.theme)
-
-	// Column C — Wave 4 (v0.33) highlights: right-aligned Table + horizontal Timeline.
-	s.wave4LabelC.Draw(p, s.theme)
-	s.table.Draw(p, s.theme)
-	s.timelineH.Draw(p, s.theme)
-
-	// Column C — Wave 5 (v0.42) highlights: Wizard + TreeTable + CommandPalette trigger.
-	s.wave5LabelC.Draw(p, s.theme)
-	s.wizard.Draw(p, s.theme)
-	s.treeTable.Draw(p, s.theme)
-	s.paletteBtn.Draw(p, s.theme)
-
-	// Wave 6 (v0.81) — Columns A & B are in colA/colB above; only C's here.
-	s.wave6LabelC.Draw(p, s.theme)
-	s.dataView.Draw(p, s.theme)
+	// Column C — every section, composed with the box-layout system (see the
+	// colC build in newState). All three columns now render via one Draw each.
+	s.colC.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
