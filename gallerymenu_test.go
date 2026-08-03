@@ -174,3 +174,140 @@ func TestContextMenuKanbanMoveLeftAndGuards(t *testing.T) {
 		t.Fatalf("out-of-range guards mutated the board: %d, want %d", len(s.kanban.Columns[0].Cards), n0)
 	}
 }
+
+// menuHasLabel reports whether menu m contains an item with the given label.
+func menuHasLabel(m *toolkit.Menu, label string) bool {
+	for _, it := range m.Items {
+		if it.Label == label {
+			return true
+		}
+	}
+	return false
+}
+
+func TestContextMenuListActions(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	lr := s.listBox.Bounds()
+	// Right-click item 0 opens the menu.
+	if !s.handleContext(lr.X+5, lr.Y+2) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a list item did not open the menu")
+	}
+
+	first := s.listBox.Items[0]
+	// Move down (item 0 -> 1).
+	s.listMenu(0).Items[1].Action()
+	if s.listBox.Items[1] != first {
+		t.Fatalf("Move-down did not swap: %v", s.listBox.Items[:2])
+	}
+	// Move up (item 1 -> 0) restores it.
+	s.listMenu(1).Items[0].Action()
+	if s.listBox.Items[0] != first {
+		t.Fatalf("Move-up did not swap back: %v", s.listBox.Items[:2])
+	}
+	// Guarded no-ops at the ends.
+	n := len(s.listBox.Items)
+	s.listMenu(0).Items[0].Action()     // Move up at top
+	s.listMenu(n - 1).Items[1].Action() // Move down at bottom
+	if len(s.listBox.Items) != n {
+		t.Fatal("end guards mutated the list length")
+	}
+	// Duplicate then delete.
+	s.listMenu(0).Items[3].Action()
+	if len(s.listBox.Items) != n+1 {
+		t.Fatalf("Duplicate: %d, want %d", len(s.listBox.Items), n+1)
+	}
+	s.listMenu(0).Items[4].Action()
+	if len(s.listBox.Items) != n {
+		t.Fatalf("Delete: %d, want %d", len(s.listBox.Items), n)
+	}
+	// Out-of-range index: every action is a guarded no-op.
+	for _, k := range []int{0, 1, 3, 4} {
+		s.listMenu(999).Items[k].Action()
+	}
+	if len(s.listBox.Items) != n {
+		t.Fatal("out-of-range list actions mutated the list")
+	}
+}
+
+func TestContextMenuTableActions(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	tr := s.table.Bounds()
+	if !s.handleContext(tr.X+5, tr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a table row did not open the menu")
+	}
+
+	first := append([]string(nil), s.table.Rows[0]...)
+	s.tableMenu(0).Items[1].Action() // Move down
+	if s.table.Rows[1][0] != first[0] {
+		t.Fatalf("Move-down did not swap rows")
+	}
+	s.tableMenu(1).Items[0].Action() // Move up
+	if s.table.Rows[0][0] != first[0] {
+		t.Fatalf("Move-up did not swap back")
+	}
+	n := len(s.table.Rows)
+	s.tableMenu(0).Items[0].Action()     // Move up at top (guard)
+	s.tableMenu(n - 1).Items[1].Action() // Move down at bottom (guard)
+	s.tableMenu(0).Items[3].Action()     // Duplicate
+	if len(s.table.Rows) != n+1 {
+		t.Fatalf("Duplicate: %d rows, want %d", len(s.table.Rows), n+1)
+	}
+	s.tableMenu(0).Items[4].Action() // Delete
+	if len(s.table.Rows) != n {
+		t.Fatalf("Delete: %d rows, want %d", len(s.table.Rows), n)
+	}
+	for _, k := range []int{0, 1, 3, 4} {
+		s.tableMenu(999).Items[k].Action()
+	}
+	if len(s.table.Rows) != n {
+		t.Fatal("out-of-range table actions mutated the rows")
+	}
+}
+
+func TestContextMenuTreeActions(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	tr := s.tree.Bounds()
+	if !s.handleContext(tr.X+40, tr.Y+2) || !s.ctxMenu.Open { // row 0 = Root
+		t.Fatal("right-click on a tree node did not open the menu")
+	}
+
+	// Root menu: Add child + Toggle expand, but NO delete.
+	rootMenu := s.treeMenu(s.tree.Root)
+	if !menuHasLabel(rootMenu, "Add child") || !menuHasLabel(rootMenu, "Toggle expand") {
+		t.Fatal("root menu missing Add child / Toggle expand")
+	}
+	if menuHasLabel(rootMenu, "Delete node") {
+		t.Fatal("root menu must not offer Delete node")
+	}
+	before := len(s.tree.Root.Children)
+	rootMenu.Items[0].Action() // Add child
+	if len(s.tree.Root.Children) != before+1 {
+		t.Fatalf("Add child: %d, want %d", len(s.tree.Root.Children), before+1)
+	}
+	exp := s.tree.Root.Expanded
+	rootMenu.Items[1].Action() // Toggle expand
+	if s.tree.Root.Expanded == exp {
+		t.Fatal("Toggle expand did not flip Root.Expanded")
+	}
+
+	// A freshly-added leaf (no children, not root): Add child + Delete, no Toggle.
+	leaf := s.tree.Root.Children[len(s.tree.Root.Children)-1]
+	leafMenu := s.treeMenu(leaf)
+	if menuHasLabel(leafMenu, "Toggle expand") {
+		t.Fatal("leaf menu must not offer Toggle expand")
+	}
+	if !menuHasLabel(leafMenu, "Delete node") {
+		t.Fatal("non-root leaf menu must offer Delete node")
+	}
+	s.tree.Selected = leaf
+	// Delete node is the last item.
+	leafMenu.Items[len(leafMenu.Items)-1].Action()
+	if s.tree.Selected != nil {
+		t.Fatal("deleting the selected node did not clear Selected")
+	}
+	for _, c := range s.tree.Root.Children {
+		if c == leaf {
+			t.Fatal("Delete node did not detach the leaf")
+		}
+	}
+}
