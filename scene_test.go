@@ -549,6 +549,25 @@ func TestWave5WidgetsPopulated(t *testing.T) {
 	}
 }
 
+// TestWave6WidgetsPopulated checks the v0.81 grid-editing-family demos are
+// wired: a PropertyGrid (with an editor opened on the Title value), a
+// PagingToolbar, a grouped+editable Table and a DataView ListBox.
+func TestWave6WidgetsPopulated(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	if s.propGrid == nil || s.propGrid.Value("Width") != "1024" {
+		t.Fatal("propGrid should be populated with a Width property")
+	}
+	if s.pagingBar == nil || s.pagingBar.Page != 6 || s.pagingBar.PageCount != 12 || !s.pagingBar.ShowRefresh {
+		t.Fatalf("pagingBar should be Page 6 of 12 with refresh, got %+v", s.pagingBar)
+	}
+	if s.gridEdit == nil || s.gridEdit.GroupBy != 0 || !s.gridEdit.Columns[1].Editable {
+		t.Fatal("gridEdit should be grouped by col 0 with an editable Owner column")
+	}
+	if s.dataView == nil || s.dataView.ItemRenderer == nil || s.dataView.Selected != 1 {
+		t.Fatal("dataView should have an ItemRenderer and a selected row")
+	}
+}
+
 // TestAllCommandPaletteActionsFire exercises every PaletteCommand.Action
 // closure wired in newState — the only observable outcome of each is the
 // Notification it fires, the same pattern TestAllMenuBarActionsFire uses.
