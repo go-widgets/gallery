@@ -14,8 +14,8 @@
   /* Fullscreen: fit the whole canvas inside the screen, centred. The mouse
      mapping in main.go scales via getBoundingClientRect, so clicks keep working. */
   #screen:fullscreen { max-width: 100vw; max-height: 100vh; width: auto; height: auto; border-radius: 0; background: #ffffff; object-fit: contain; }
-  #fs { display: block; margin: 14px auto 0; padding: 8px 16px; background: #14b8a6; color: #04201c; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
-  #fs:hover { background: #12a394; }
+  #fsbtn { display: block; margin: 14px auto 0; padding: 8px 16px; background: #14b8a6; color: #04201c; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+  #fsbtn:hover { background: #12a394; }
   .hint { color: #9aa0b4; font-size: .9rem; margin: 14px 0 24px; }
   #err { color: #ff5f57; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; white-space: pre-wrap; }
   a { color: #14b8a6; }
@@ -27,7 +27,7 @@
     <h1>go-widgets gallery</h1>
     <p class="tagline">Live wasm demo of <a href="https://github.com/go-widgets/toolkit">go-widgets/toolkit</a>.</p>
     <canvas id="screen" width="960" height="720"></canvas>
-    <button id="fs" type="button">⛶ Fullscreen</button>
+    <button id="fsbtn" type="button">⛶ Fullscreen</button>
     <p class="hint">Dashboard — every widget kind (Button, Toggle, CheckButton, RadioButton, Entry, SpinButton, Scale, DropDown, ProgressBar, LevelBar, Spinner, TextView, Calendar, ColorChooser, ListBox, TreeView, Notebook, Paned, Expander + Frame, Menu, Toolbar, Statusbar, Notification) side by side, mirroring GTK4's widget-factory layout at a glance. Click a menu name to open its popover; click any widget for a toast. Press <strong>⛶ Fullscreen</strong> (or double-click the canvas) to view it full-screen.</p>
     <div id="err"></div>
     <p><a href="https://github.com/go-widgets">go-widgets</a> · <a href="https://github.com/go-widgets/gallery">source</a></p>
@@ -43,8 +43,32 @@
         if (document.fullscreenElement) { document.exitFullscreen(); }
         else if (screen.requestFullscreen) { screen.requestFullscreen(); }
       };
-      document.getElementById("fs").addEventListener("click", toggle);
+      document.getElementById("fsbtn").addEventListener("click", toggle);
       screen.addEventListener("dblclick", toggle);
+    })();
+  </script>
+  <script>
+    // Defensive Go-wasm fs guard. Go's syscall/fs_js.go reads globalThis.fs
+    // (constants + writeSync) at init; wasm_exec.js only installs its fallback
+    // when globalThis.fs is absent. A named DOM element (e.g. a button whose id
+    // shadows `fs`) or a browser quirk can leave fs present-but-incomplete,
+    // which panics the runtime and blanks the canvas. Fill in only what's
+    // missing so the demo renders in any environment.
+    (() => {
+      const g = globalThis;
+      if (!g.fs || typeof g.fs.writeSync !== "function") {
+        let buf = ""; const dec = new TextDecoder("utf-8");
+        g.fs = {
+          constants: { O_WRONLY: -1, O_RDWR: -1, O_CREAT: -1, O_TRUNC: -1, O_APPEND: -1, O_EXCL: -1, O_DIRECTORY: -1 },
+          writeSync(fd, b) {
+            buf += dec.decode(b);
+            const nl = buf.lastIndexOf("\n");
+            if (nl !== -1) { console.log(buf.substring(0, nl)); buf = buf.substring(nl + 1); }
+            return b.length;
+          },
+          write(fd, b, off, len, pos, cb) { const n = this.writeSync(fd, b.subarray(off, off + len)); cb(null, n); },
+        };
+      }
     })();
   </script>
   <script src="wasm_exec.js"></script>
