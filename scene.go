@@ -188,6 +188,11 @@ type state struct {
 	dragTarget toolkit.Widget
 	dragBounds toolkit.Rect
 
+	// vm is the MVVM layer: the theme/Agenda-view switchers, the Agenda event
+	// list and the palette Button bind to its Observables / ObservableList /
+	// Command (see viewmodel.go).
+	vm *viewModel
+
 	// App-shell demo: a Border with a COLLAPSIBLE sidebar (a Frame.Collapsible
 	// in the West region) and a draggable splitter GRIP (Border.WestSplit),
 	// its Center hosting a Paned whose handle is a second grip. Demonstrates
@@ -397,10 +402,8 @@ func newState(w, _ int) *state {
 	}
 	s.themeNames = []string{"Light", "Dark", "Adwaita", "WhiteSur"}
 	s.themeSwitcher = toolkit.NewViewSwitcher(s.themeNames, 0)
-	s.themeSwitcher.OnChange = func(i int) {
-		s.theme = s.themes[i]
-		s.showNotify("Theme: " + s.themeNames[i])
-	}
+	// OnChange is installed by the MVVM layer (newViewModel binds themeSwitcher
+	// to vm.themeIndex; a subscription applies the palette).
 	s.themeSwitcher.SetBounds(toolkit.Rect{
 		X: margin,
 		Y: toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad,
@@ -751,22 +754,17 @@ func newState(w, _ int) *state {
 	})
 	s.agenda.View = toolkit.AgendaMonth
 	s.agenda.Year, s.agenda.Month = 2026, 7
-	// Clicking an empty in-month day adds an event there (v0.83 interactivity).
+	// Clicking an empty in-month day adds an event there, through the MVVM
+	// event ObservableList (which mirrors back into the widget).
 	s.agenda.OnDayActivate = func(y, m, d int) {
 		s.addedEvents++
-		s.agenda.Events = append(s.agenda.Events, toolkit.AgendaEvent{
-			Title: "New " + itoa(s.addedEvents), Y: y, M: m, D: d,
-			Fill: toolkit.RGB(0x7a, 0x5a, 0xf0),
-		})
+		s.vm.addEvent("New "+itoa(s.addedEvents), y, m, d, toolkit.RGB(0x7a, 0x5a, 0xf0))
 		s.showNotify("Added event on " + itoa(m) + "/" + itoa(d))
 	}
 	// A four-segment switcher drives the Agenda's view (Week/Month/Quarter/Year),
-	// whose enum matches these indices 0..3.
+	// whose enum matches these indices 0..3. Its OnChange is installed by the
+	// MVVM layer (bound to vm.agendaView).
 	s.agendaSwitcher = toolkit.NewViewSwitcher([]string{"Week", "Month", "Quarter", "Year"}, int(toolkit.AgendaMonth))
-	s.agendaSwitcher.OnChange = func(i int) {
-		s.agenda.View = toolkit.AgendaView(i)
-		s.showNotify("Agenda view: " + s.agendaSwitcher.Views[i])
-	}
 
 	s.kanban = toolkit.NewKanban([]toolkit.KanbanColumn{
 		{Title: "To Do", Cards: []toolkit.KanbanCard{
@@ -794,6 +792,11 @@ func newState(w, _ int) *state {
 	s.gantt.OnTaskChange = func(i, start, end int) {
 		s.showNotify(s.gantt.Tasks[i].Label + ": " + itoa(start) + "→" + itoa(end))
 	}
+
+	// MVVM layer: bind the theme + Agenda-view switchers to Observables, the
+	// palette Button to a Command, and the Agenda events to an ObservableList.
+	// Constructed here, once every bound widget exists.
+	s.vm = newViewModel(s)
 
 	// App-shell: collapsible sidebar (Frame.Collapsible in a Border West
 	// region) + splitter grips (Border.WestSplit + the Paned handle).
