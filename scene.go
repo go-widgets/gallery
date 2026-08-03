@@ -52,23 +52,20 @@ type state struct {
 	notify  *toolkit.Notification
 
 	// Column A — Actions & Inputs.
-	actionsLabel *toolkit.Label
-	button       *toolkit.Button
-	toggle       *toolkit.ToggleButton
-	check        *toolkit.CheckButton
-	radioGroup   *toolkit.RadioGroup
-	radios       []*toolkit.RadioButton
+	button     *toolkit.Button
+	toggle     *toolkit.ToggleButton
+	check      *toolkit.CheckButton
+	radioGroup *toolkit.RadioGroup
+	radios     []*toolkit.RadioButton
 
-	inputsLabel *toolkit.Label
-	entry       *toolkit.Entry
-	spin        *toolkit.SpinButton
-	scale       *toolkit.Scale
-	dropdown    *toolkit.DropDown
+	entry    *toolkit.Entry
+	spin     *toolkit.SpinButton
+	scale    *toolkit.Scale
+	dropdown *toolkit.DropDown
 
-	feedbackLabel *toolkit.Label
-	progress      *toolkit.ProgressBar
-	level         *toolkit.LevelBar
-	spinner       *toolkit.Spinner
+	progress *toolkit.ProgressBar
+	level    *toolkit.LevelBar
+	spinner  *toolkit.Spinner
 
 	// Column B — Text & Time.
 	textLabel   *toolkit.Label
@@ -90,18 +87,16 @@ type state struct {
 	// Container demos to fill the vertical whitespace + demonstrate
 	// composition (a leaf-only widget dashboard would leave 30 % of
 	// each column empty).
-	notebookLabel *toolkit.Label
-	notebook      *toolkit.Notebook
+	notebook *toolkit.Notebook
 
 	panedLabel *toolkit.Label
 	paned      *toolkit.Paned
 
 	// Column-A Wave 1 (v0.7) highlights.
-	wave1Label *toolkit.Label
-	swtch      *toolkit.Switch
-	alert      *toolkit.Alert
-	card       *toolkit.Card
-	steps      *toolkit.Steps
+	swtch *toolkit.Switch
+	alert *toolkit.Alert
+	card  *toolkit.Card
+	steps *toolkit.Steps
 
 	// Column-B Wave 2 (v0.8) highlights.
 	wave2Label *toolkit.Label
@@ -121,9 +116,8 @@ type state struct {
 	// Column-A Wave 4 (v0.33) highlights: a vertical Toolbar side rail
 	// + a vertical Steps checklist, demonstrating Toolbar.Orientation
 	// and Steps.Orientation.
-	wave4LabelA *toolkit.Label
-	toolbarV    *toolkit.Toolbar
-	stepsV      *toolkit.Steps
+	toolbarV *toolkit.Toolbar
+	stepsV   *toolkit.Steps
 
 	// Column-B Wave 4 (v0.33) highlights: a second, smaller Notebook
 	// with its tab strip on the left (Notebook.TabSide) + a second
@@ -142,7 +136,6 @@ type state struct {
 	// Column-A Wave 5 (v0.42) highlights: Accordion (collapsible
 	// sections), ColorPicker (HSV square + hue/alpha sliders) and
 	// SegmentedBar (proportional multi-colour meter).
-	wave5LabelA *toolkit.Label
 	accordion   *toolkit.Accordion
 	colorPicker *toolkit.ColorPicker
 	segBar      *toolkit.SegmentedBar
@@ -170,7 +163,6 @@ type state struct {
 	// above a PagingToolbar. Column B: a Table showing grouped rows + an
 	// open inline cell editor. Column C: a ListBox with a DataView
 	// ItemRenderer painting rich two-line rows.
-	wave6LabelA *toolkit.Label
 	propGrid    *toolkit.PropertyGrid
 	pagingBar   *toolkit.PagingToolbar
 	wave6LabelB *toolkit.Label
@@ -187,6 +179,15 @@ type state struct {
 	themes        []*toolkit.Theme
 	themeNames    []string
 
+	// colA is Column A composed with the box-layout system: a VBox of
+	// titled Frames (one per section), each Frame wrapping a VBox/HBox of
+	// the section's widgets. It replaces the hand-computed rects + pushCard
+	// borders + section Labels for Column A -- SetBounds cascades absolute
+	// positions to every widget (so the clickables list still hit-tests), and
+	// draw() renders the whole column with a single colA.Draw. (Columns B/C
+	// are still hand-laid pending their own migration.)
+	colA *toolkit.VBox
+
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
@@ -201,6 +202,76 @@ type state struct {
 // cardPad is the extra pixels a card extends past its inner-most
 // widget rect on every side. Kept small so cards feel tight.
 const cardPad = 6
+
+// frameChromeH is the vertical space a titled Frame adds around its child:
+// the 1px top+bottom border, the FrameTitleH title bar and the default 4px
+// padding on top+bottom. Used to size a section Frame from its content height.
+const frameChromeH = 2 + toolkit.FrameTitleH + 2*4
+
+// boxItem pairs a widget with the fixed height it occupies in a VBox column.
+type boxItem struct {
+	w toolkit.Widget
+	h int
+}
+
+// sectionFrame wraps items in a titled Frame whose child is a vertical box
+// (VBox) stacking them with the given spacing. It returns the Frame and the
+// total height the Frame needs (content + title bar + border + padding), so a
+// column VBox can AddFixed it without guessing.
+func sectionFrame(title string, spacing int, items ...boxItem) (*toolkit.Frame, int) {
+	vb := toolkit.NewVBox()
+	vb.Spacing = spacing
+	content := 0
+	for i, it := range items {
+		vb.AddFixed(it.w, it.h)
+		content += it.h
+		if i > 0 {
+			content += spacing
+		}
+	}
+	f := toolkit.NewFrame(vb)
+	f.Title = title
+	return f, content + frameChromeH
+}
+
+// hrowFlex lays widgets left-to-right with equal flex weight (an HBox), for a
+// section row that puts two widgets side by side (e.g. Button + ToggleButton).
+func hrowFlex(spacing int, ws ...toolkit.Widget) toolkit.Widget {
+	hb := toolkit.NewHBox()
+	hb.Spacing = spacing
+	for _, w := range ws {
+		hb.AddFlex(w, 1)
+	}
+	return hb
+}
+
+// hrowFixedFlex lays a fixed-width widget beside a flex-filling one (an HBox),
+// for rows like SpinButton (fixed) + Scale (fill) or the vertical Toolbar rail
+// (fixed) + vertical Steps (fill).
+func hrowFixedFlex(spacing, fixedW int, fixed, flex toolkit.Widget) toolkit.Widget {
+	hb := toolkit.NewHBox()
+	hb.Spacing = spacing
+	hb.AddFixed(fixed, fixedW)
+	hb.AddFlex(flex, 1)
+	return hb
+}
+
+// column stacks section Frames into a single VBox column, spaced by sectPad,
+// and returns the VBox plus its total height (sum of the frame heights + the
+// inter-section spacing) so newState can position it exactly.
+func column(frames []*toolkit.Frame, heights []int) (*toolkit.VBox, int) {
+	vb := toolkit.NewVBox()
+	vb.Spacing = sectPad
+	total := 0
+	for i, f := range frames {
+		vb.AddFixed(f, heights[i])
+		total += heights[i]
+		if i > 0 {
+			total += sectPad
+		}
+	}
+	return vb, total
+}
 
 func newState(w, h int) *state {
 	s := &state{w: w, h: h, theme: toolkit.DefaultLight()}
@@ -306,15 +377,11 @@ func newState(w, h int) *state {
 
 	// --- Column A: Actions & Inputs & Feedback ---------------------------
 
-	y := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
-	cardStart := y
-
-	s.actionsLabel = toolkit.NewLabel("Actions")
-	s.actionsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
-
+	// Column A widgets — CONSTRUCTION ONLY. Placement is owned by the
+	// box-layout colA (a VBox of titled Frames) built near the end of
+	// newState; no hand-computed rects here. (Columns B/C below still use the
+	// running y/yB/yC hand-layout pending their own migration.)
 	s.button = toolkit.NewButton("Click me", func() { s.showNotify("Button clicked") })
-	s.button.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 140, H: 28})
 
 	s.toggle = toolkit.NewToggleButton("Toggle", false)
 	s.toggle.OnToggle = func(on bool) {
@@ -324,12 +391,8 @@ func newState(w, h int) *state {
 			s.showNotify("Toggle: OFF")
 		}
 	}
-	s.toggle.SetBounds(toolkit.Rect{X: colAX + 148, Y: y, W: 140, H: 28})
-	y += 28 + sectGap
 
 	s.check = toolkit.NewCheckButton("Enable feature", true)
-	s.check.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 22})
-	y += 22 + sectGap
 
 	s.radioGroup = toolkit.NewRadioGroup()
 	s.radios = []*toolkit.RadioButton{
@@ -339,61 +402,23 @@ func newState(w, h int) *state {
 	}
 	for _, r := range s.radios {
 		s.radioGroup.Add(r)
-		r.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 20})
-		y += 20 + sectGap/2
 	}
 	s.radios[0].Checked = true
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
-	y += sectPad
-	cardStart = y
-
-	s.inputsLabel = toolkit.NewLabel("Inputs")
-	s.inputsLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
 
 	s.entry = toolkit.NewEntry("editable text")
-	s.entry.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 26})
-	y += 26 + sectGap
-
 	s.spin = toolkit.NewSpinButton(0, 100, 42, 1)
-	s.spin.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 120, H: 26})
 	s.scale = toolkit.NewScale(0, 100, 50)
-	s.scale.SetBounds(toolkit.Rect{X: colAX + 128, Y: y + 4, W: colW - 128, H: 18})
-	y += 26 + sectGap
-
 	s.dropdown = toolkit.NewDropDown([]string{"UTF-8", "Latin-1", "Shift-JIS"}, 0)
-	s.dropdown.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 26})
-	y += 26
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
-	y += sectPad
-	cardStart = y
-
-	s.feedbackLabel = toolkit.NewLabel("Feedback")
-	s.feedbackLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
 
 	s.progress = toolkit.NewProgressBar()
 	s.progress.Fraction = 0.66
 	s.progress.Label = "66 %"
-	s.progress.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 18})
-	y += 18 + sectGap
 
 	s.level = toolkit.NewLevelBar(10)
 	s.level.Value = 7
-	s.level.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 18})
-	y += 18 + sectGap
 
 	s.spinner = toolkit.NewSpinner()
 	s.spinner.Active = true
-	s.spinner.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 24, H: 24})
-	y += 24
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
-	y += sectPad
-	cardStart = y
-
-	s.notebookLabel = toolkit.NewLabel("Notebook")
-	s.notebookLabel.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
 
 	// Notebook demo: three tabs each hosting a Label. Notebook.Draw
 	// re-sizes its active page to fill the body, which is exactly what
@@ -409,9 +434,6 @@ func newState(w, h int) *state {
 	s.notebook.AddTab("Pie", toolkit.NewPieChart([]float64{3, 5, 2, 4, 1}))
 	s.notebook.AddTab("Docs", toolkit.NewMarkdownView(
 		"# Charts\n\nLive toolkit charts, one per tab:\n\n- line\n- bar\n- pie"))
-	s.notebook.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 80})
-	y += 80
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B: Text, Calendar, ColorChooser --------------------------
 
@@ -513,15 +535,7 @@ func newState(w, h int) *state {
 	yC += 60
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
-	// --- Column A extension: Wave 1 (v0.7) highlights -------------------
-
-	y += sectPad
-	cardStart = y
-
-	s.wave1Label = toolkit.NewLabel("Wave 1 (v0.7)")
-	s.wave1Label.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
-
+	// --- Column A extension: Wave 1 (v0.7) — construction only ----------
 	s.swtch = toolkit.NewSwitch(true)
 	s.swtch.OnToggle = func(on bool) {
 		if on {
@@ -530,60 +544,24 @@ func newState(w, h int) *state {
 			s.showNotify("Switch: OFF")
 		}
 	}
-	s.swtch.SetBounds(toolkit.Rect{X: colAX, Y: y, W: 44, H: 22})
-	y += 22 + sectGap
-
 	s.alert = toolkit.NewAlert("Saved 3 minutes ago.", toolkit.AlertSuccess)
-	s.alert.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 32})
-	y += 32 + sectGap
-
 	s.card = toolkit.NewCard("Card", "Title above.\nBody here.", "footer note")
-	s.card.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 74})
-	y += 74 + sectGap
-
 	s.steps = toolkit.NewSteps([]string{"Plan", "Build", "Test", "Ship"}, 1)
-	s.steps.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 32})
-	y += 32
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
-	// --- Column A extension: Wave 4 (v0.33) highlights -------------------
+	// --- Column A extension: Wave 4 (v0.33) — construction only ---------
 	//
-	// A vertical Toolbar side rail (Toolbar.Orientation = Vertical) sits
-	// beside a vertical Steps checklist (Steps.Orientation = Vertical) —
-	// both new v0.33 layout axes, shown side by side so the row reads as
-	// "same widget, rotated".
-
-	y += sectPad
-	cardStart = y
-
-	s.wave4LabelA = toolkit.NewLabel("Wave 4 (v0.33)")
-	s.wave4LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
-
-	const railW = 24 // one ToolbarButtonW-wide column
+	// A vertical Toolbar side rail (Toolbar.Orientation = Vertical) beside a
+	// vertical Steps checklist (Steps.Orientation = Vertical); colA lays them
+	// side by side in an HBox (see the Wave 4 section frame).
 	s.toolbarV = toolkit.NewToolbar([]toolkit.ToolbarItem{
 		{Label: "A", OnClick: func() { s.showNotify("Side rail: A") }},
 		{Label: "B", OnClick: func() { s.showNotify("Side rail: B") }},
 		{Label: "C", OnClick: func() { s.showNotify("Side rail: C") }},
 	})
 	s.toolbarV.Orientation = toolkit.Vertical
-	railH := 3 * toolkit.ToolbarButtonH
 
 	s.stepsV = toolkit.NewSteps([]string{"Plan", "Build", "Ship"}, 1)
 	s.stepsV.Orientation = toolkit.Vertical
-	// Steps.Draw (vertical) advances 3*StepBoxH + 2*StepConnectorW px
-	// regardless of the bounds' H, so the row's actual footprint is
-	// driven by the taller of the two widgets, not the shorter rail.
-	stepsVH := 3*toolkit.StepBoxH + 2*toolkit.StepConnectorW
-	rowH := railH
-	if stepsVH > rowH {
-		rowH = stepsVH
-	}
-	s.toolbarV.SetBounds(toolkit.Rect{X: colAX, Y: y, W: railW, H: rowH})
-	stepsVX := colAX + railW + sectGap
-	s.stepsV.SetBounds(toolkit.Rect{X: stepsVX, Y: y, W: colW - railW - sectGap, H: stepsVH})
-	y += rowH
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B extension: Wave 2 (v0.8) highlights -------------------
 
@@ -722,42 +700,25 @@ func newState(w, h int) *state {
 	yC += 36
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
-	// --- Column A extension: Wave 5 (v0.42) highlights -------------------
+	// --- Column A extension: Wave 5 (v0.42) — construction only ---------
 	//
-	// Accordion (exclusive collapsible sections, second one pre-expanded)
-	// sits above a ColorPicker (HSV square + hue/alpha sliders) and a
-	// SegmentedBar (a disk-usage-style proportional meter).
-
-	y += sectPad
-	cardStart = y
-
-	s.wave5LabelA = toolkit.NewLabel("Wave 5 (v0.42)")
-	s.wave5LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
-
+	// Accordion (collapsible sections) + ColorPicker + SegmentedBar; colA
+	// stacks them in the Wave 5 section frame.
 	s.accordion = toolkit.NewAccordion([]toolkit.AccordionSection{
 		{Title: "Specs", Body: toolkit.NewLabel("2.4 GHz / 16 GB / 512 GB")},
 		{Title: "Shipping", Body: toolkit.NewLabel("Ships in 2-3 business days")},
 		{Title: "Returns", Body: toolkit.NewLabel("30-day free returns")},
 	})
 	s.accordion.Expanded = 1
-	const accordionH = 3*toolkit.ExpanderHeaderH + 56
-	s.accordion.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: accordionH})
-	y += accordionH + sectGap
 
 	s.colorPicker = toolkit.NewColorPicker(toolkit.RGB(0x35, 0x84, 0xe4))
 	s.colorPicker.OnChange = func(c toolkit.RGBA) { s.showNotify("ColorPicker changed") }
-	s.colorPicker.SetBounds(toolkit.Rect{X: colAX, Y: y, W: toolkit.ColorPickerWidth, H: toolkit.ColorPickerHeight})
-	y += toolkit.ColorPickerHeight + sectGap
 
 	s.segBar = toolkit.NewSegmentedBar([]toolkit.BarSegment{
 		{Value: 62, Fill: toolkit.RGB(0x35, 0x84, 0xe4), Label: "used"},
 		{Value: 18, Fill: toolkit.RGB(0xe5, 0xa5, 0x0a), Label: "reserved"},
 		{Value: 20, Fill: toolkit.RGB(0xc0, 0xbf, 0xbc), Label: "free"},
 	})
-	s.segBar.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: 22})
-	y += 22
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B extension: Wave 5 (v0.42) highlights -------------------
 	//
@@ -840,36 +801,22 @@ func newState(w, h int) *state {
 	yC += 28
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
-	// --- Column A extension: Wave 6 (v0.81) highlights -------------------
+	// --- Column A extension: Wave 6 (v0.81) — construction only ---------
 	//
 	// A PropertyGrid (2-column Name/Value, Value inline-editable) above a
-	// PagingToolbar (First/Prev/"Page N of M"/Next/Last + Refresh) -- the
-	// grid-editing family's record-navigation footer.
-
-	y += sectPad
-	cardStart = y
-
-	s.wave6LabelA = toolkit.NewLabel("Wave 6 (v0.81)")
-	s.wave6LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
-	y += toolkit.GlyphHeight() + sectGap
-
+	// PagingToolbar (First/Prev/"Page N of M"/Next/Last + Refresh); colA
+	// stacks them in the Wave 6 section frame.
 	s.propGrid = toolkit.NewPropertyGrid()
 	s.propGrid.Add("Width", "1024")
 	s.propGrid.Add("Height", "768")
 	s.propGrid.Add("Title", "Untitled")
 	s.propGrid.Add("Visible", "true")
 	s.propGrid.Table().Selected = 2
-	const propGridH = toolkit.TableHeaderHeight + 4*toolkit.TableRowHeight
-	s.propGrid.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: propGridH})
 	// Open the editor on the "Title" value cell so the demo shows editing.
 	s.propGrid.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: colW - 40, Y: toolkit.TableHeaderHeight + 2*toolkit.TableRowHeight + 2})
-	y += propGridH + sectGap
 
 	s.pagingBar = toolkit.NewPagingToolbar(6, 12)
 	s.pagingBar.ShowRefresh = true
-	s.pagingBar.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.PagingBtnH})
-	y += toolkit.PagingBtnH
-	s.pushCard(colAX, cardStart, colW, y-cardStart)
 
 	// --- Column B extension: Wave 6 (v0.81) highlights -------------------
 	//
@@ -941,6 +888,51 @@ func newState(w, h int) *state {
 	s.dataView.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: dataViewH})
 	yC += dataViewH
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+
+	// --- Column A, re-composed with the box-layout system ----------------
+	//
+	// Every Column-A widget constructed above is re-wrapped here into titled
+	// Frames stacked in a VBox. colA.SetBounds cascades absolute bounds to
+	// all of them (overriding the hand-computed rects), and draw() paints the
+	// whole column via colA.Draw -- so the section Labels + pushCard borders
+	// for Column A are no longer drawn (Frame supplies the title + border).
+	railW6 := 3 * toolkit.ToolbarButtonH
+	stepsV6 := 3*toolkit.StepBoxH + 2*toolkit.StepConnectorW
+	wave4RowH := railW6
+	if stepsV6 > wave4RowH {
+		wave4RowH = stepsV6
+	}
+	accFrameH := 3*toolkit.ExpanderHeaderH + 56
+	propGH := toolkit.TableHeaderHeight + 4*toolkit.TableRowHeight
+
+	fActions, hActions := sectionFrame("Actions", sectGap,
+		boxItem{hrowFlex(sectGap, s.button, s.toggle), 28},
+		boxItem{s.check, 22},
+		boxItem{s.radios[0], 20}, boxItem{s.radios[1], 20}, boxItem{s.radios[2], 20})
+	fInputs, hInputs := sectionFrame("Inputs", sectGap,
+		boxItem{s.entry, 26},
+		boxItem{hrowFixedFlex(sectGap, 120, s.spin, s.scale), 26},
+		boxItem{s.dropdown, 26})
+	fFeedback, hFeedback := sectionFrame("Feedback", sectGap,
+		boxItem{s.progress, 18}, boxItem{s.level, 18}, boxItem{s.spinner, 24})
+	fNotebook, hNotebook := sectionFrame("Notebook", sectGap, boxItem{s.notebook, 80})
+	fWave1, hWave1 := sectionFrame("Wave 1 (v0.7)", sectGap,
+		boxItem{s.swtch, 22}, boxItem{s.alert, 32}, boxItem{s.card, 74}, boxItem{s.steps, 32})
+	fWave4, hWave4 := sectionFrame("Wave 4 (v0.33)", sectGap,
+		boxItem{hrowFixedFlex(sectGap, 24, s.toolbarV, s.stepsV), wave4RowH})
+	fWave5, hWave5 := sectionFrame("Wave 5 (v0.42)", sectGap,
+		boxItem{s.accordion, accFrameH},
+		boxItem{s.colorPicker, toolkit.ColorPickerHeight},
+		boxItem{s.segBar, 22})
+	fWave6, hWave6 := sectionFrame("Wave 6 (v0.81)", sectGap,
+		boxItem{s.propGrid, propGH}, boxItem{s.pagingBar, toolkit.PagingBtnH})
+
+	var totalA int
+	s.colA, totalA = column(
+		[]*toolkit.Frame{fActions, fInputs, fFeedback, fNotebook, fWave1, fWave4, fWave5, fWave6},
+		[]int{hActions, hInputs, hFeedback, hNotebook, hWave1, hWave4, hWave5, hWave6})
+	colATop := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
+	s.colA.SetBounds(toolkit.Rect{X: colAX, Y: colATop, W: colW, H: totalA})
 
 	// --- click routing table --------------------------------------------
 
@@ -1026,25 +1018,11 @@ func (s *state) draw(buf []byte) {
 	s.toolbar.Draw(p, s.theme)
 	s.themeSwitcher.Draw(p, s.theme)
 
-	// Column A — Actions & Inputs & Feedback.
-	s.actionsLabel.Draw(p, s.theme)
-	s.button.Draw(p, s.theme)
-	s.toggle.Draw(p, s.theme)
-	s.check.Draw(p, s.theme)
-	for _, r := range s.radios {
-		r.Draw(p, s.theme)
-	}
-	s.inputsLabel.Draw(p, s.theme)
-	s.entry.Draw(p, s.theme)
-	s.spin.Draw(p, s.theme)
-	s.scale.Draw(p, s.theme)
-	s.dropdown.Draw(p, s.theme)
-	s.feedbackLabel.Draw(p, s.theme)
-	s.progress.Draw(p, s.theme)
-	s.level.Draw(p, s.theme)
-	s.spinner.Draw(p, s.theme)
-	s.notebookLabel.Draw(p, s.theme)
-	s.notebook.Draw(p, s.theme)
+	// Column A — every section, composed with the box-layout system: a
+	// single VBox of titled Frames draws its own borders/titles + all the
+	// widgets inside (see the colA build in newState). Replaces the
+	// hand-drawn Column-A widgets, section Labels and card borders.
+	s.colA.Draw(p, s.theme)
 
 	// Column B — Text & Time.
 	s.textLabel.Draw(p, s.theme)
@@ -1064,13 +1042,6 @@ func (s *state) draw(buf []byte) {
 	s.panedLabel.Draw(p, s.theme)
 	s.paned.Draw(p, s.theme)
 
-	// Column A — Wave 1 (v0.7) highlights.
-	s.wave1Label.Draw(p, s.theme)
-	s.swtch.Draw(p, s.theme)
-	s.alert.Draw(p, s.theme)
-	s.card.Draw(p, s.theme)
-	s.steps.Draw(p, s.theme)
-
 	// Column B — Wave 2 (v0.8) highlights.
 	s.wave2Label.Draw(p, s.theme)
 	s.headerBar.Draw(p, s.theme)
@@ -1086,11 +1057,6 @@ func (s *state) draw(buf []byte) {
 	s.chip.Draw(p, s.theme)
 	s.splitButton.Draw(p, s.theme)
 
-	// Column A — Wave 4 (v0.33) highlights: vertical Toolbar + vertical Steps.
-	s.wave4LabelA.Draw(p, s.theme)
-	s.toolbarV.Draw(p, s.theme)
-	s.stepsV.Draw(p, s.theme)
-
 	// Column B — Wave 4 (v0.33) highlights: side-tab Notebook + upward DropDown.
 	s.wave4LabelB.Draw(p, s.theme)
 	s.notebookSide.Draw(p, s.theme)
@@ -1100,12 +1066,6 @@ func (s *state) draw(buf []byte) {
 	s.wave4LabelC.Draw(p, s.theme)
 	s.table.Draw(p, s.theme)
 	s.timelineH.Draw(p, s.theme)
-
-	// Column A — Wave 5 (v0.42) highlights: Accordion + ColorPicker + SegmentedBar.
-	s.wave5LabelA.Draw(p, s.theme)
-	s.accordion.Draw(p, s.theme)
-	s.colorPicker.Draw(p, s.theme)
-	s.segBar.Draw(p, s.theme)
 
 	// Column B — Wave 5 (v0.42) highlights: Carousel + MarkdownEditor + DateRangePicker.
 	s.wave5LabelB.Draw(p, s.theme)
@@ -1119,10 +1079,7 @@ func (s *state) draw(buf []byte) {
 	s.treeTable.Draw(p, s.theme)
 	s.paletteBtn.Draw(p, s.theme)
 
-	// Wave 6 (v0.81) — grid-editing family.
-	s.wave6LabelA.Draw(p, s.theme)
-	s.propGrid.Draw(p, s.theme)
-	s.pagingBar.Draw(p, s.theme)
+	// Wave 6 (v0.81) — grid-editing family (Column A is in colA above).
 	s.wave6LabelB.Draw(p, s.theme)
 	s.gridEdit.Draw(p, s.theme)
 	s.wave6LabelC.Draw(p, s.theme)
