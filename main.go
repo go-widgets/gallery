@@ -68,9 +68,32 @@ func main() {
 		})
 		canvas.Call("addEventListener", name, cb)
 	}
-	listen("mousedown", state.handleClick)
+	// Left-button press only: a right press is the edit menu's business (below),
+	// not a grab/select. mousemove/mouseup carry no button distinction.
+	canvas.Call("addEventListener", "mousedown", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) == 0 || args[0].Get("button").Int() != 0 {
+			return nil
+		}
+		x, y := coords(args[0])
+		if state.handleClick(x, y) {
+			render()
+		}
+		return nil
+	}))
 	listen("mousemove", state.handleDrag)
 	listen("mouseup", state.handleRelease)
+	// Right-click opens the edit context menu; suppress the browser's own menu.
+	canvas.Call("addEventListener", "contextmenu", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) == 0 {
+			return nil
+		}
+		args[0].Call("preventDefault")
+		x, y := coords(args[0])
+		if state.handleContext(x, y) {
+			render()
+		}
+		return nil
+	}))
 
 	// A 60-Hz tick drives the Notification.Life countdown so toasts
 	// auto-hide. setInterval doesn't need a huge slice of allocs
