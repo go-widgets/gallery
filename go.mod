@@ -3,6 +3,7 @@ module github.com/go-widgets/gallery
 go 1.26.4
 
 require (
+	github.com/go-widgets/mvvm v0.3.0
 	github.com/go-widgets/painter v0.2.0
 	github.com/go-widgets/toolkit v0.83.1
 )
