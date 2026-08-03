@@ -68,11 +68,8 @@ type state struct {
 	spinner  *toolkit.Spinner
 
 	// Column B — Text & Time.
-	textLabel   *toolkit.Label
 	textView    *toolkit.TextView
-	calLabel    *toolkit.Label
 	calendar    *toolkit.Calendar
-	colorLabel  *toolkit.Label
 	colorChoose *toolkit.ColorChooser
 
 	// Column C — Selection & Structure.
@@ -99,11 +96,10 @@ type state struct {
 	steps *toolkit.Steps
 
 	// Column-B Wave 2 (v0.8) highlights.
-	wave2Label *toolkit.Label
-	toast      *toolkit.Toast
-	banner     *toolkit.Banner
-	headerBar  *toolkit.HeaderBar
-	diff       *toolkit.Diff
+	toast     *toolkit.Toast
+	banner    *toolkit.Banner
+	headerBar *toolkit.HeaderBar
+	diff      *toolkit.Diff
 
 	// Column-C Wave 3 (v0.9) highlights.
 	wave3Label     *toolkit.Label
@@ -122,7 +118,6 @@ type state struct {
 	// Column-B Wave 4 (v0.33) highlights: a second, smaller Notebook
 	// with its tab strip on the left (Notebook.TabSide) + a second
 	// DropDown that opens its popover upward (DropDown.OpenUp).
-	wave4LabelB  *toolkit.Label
 	notebookSide *toolkit.Notebook
 	dropdownUp   *toolkit.DropDown
 
@@ -143,10 +138,9 @@ type state struct {
 	// Column-B Wave 5 (v0.42) highlights: Carousel (paged slide viewer),
 	// MarkdownEditor (live source/preview split) and DateRangePicker
 	// (two-endpoint month-grid selection).
-	wave5LabelB *toolkit.Label
-	carousel    *toolkit.Carousel
-	mdEditor    *toolkit.MarkdownEditor
-	dateRange   *toolkit.DateRangePicker
+	carousel  *toolkit.Carousel
+	mdEditor  *toolkit.MarkdownEditor
+	dateRange *toolkit.DateRangePicker
 
 	// Column-C Wave 5 (v0.42) highlights: Wizard (multi-step flow) and
 	// TreeTable (Table-shaped grid with nesting). A CommandPalette is
@@ -165,7 +159,6 @@ type state struct {
 	// ItemRenderer painting rich two-line rows.
 	propGrid    *toolkit.PropertyGrid
 	pagingBar   *toolkit.PagingToolbar
-	wave6LabelB *toolkit.Label
 	gridEdit    *toolkit.Table
 	wave6LabelC *toolkit.Label
 	dataView    *toolkit.ListBox
@@ -184,9 +177,11 @@ type state struct {
 	// the section's widgets. It replaces the hand-computed rects + pushCard
 	// borders + section Labels for Column A -- SetBounds cascades absolute
 	// positions to every widget (so the clickables list still hit-tests), and
-	// draw() renders the whole column with a single colA.Draw. (Columns B/C
-	// are still hand-laid pending their own migration.)
+	// draw() renders the whole column with a single colA.Draw.
 	colA *toolkit.VBox
+	// colB is Column B composed with the box-layout system (same structure as
+	// colA). Columns A/B are box-laid; Column C migrates in a follow-up.
+	colB *toolkit.VBox
 
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
@@ -435,42 +430,13 @@ func newState(w, h int) *state {
 	s.notebook.AddTab("Docs", toolkit.NewMarkdownView(
 		"# Charts\n\nLive toolkit charts, one per tab:\n\n- line\n- bar\n- pie"))
 
-	// --- Column B: Text, Calendar, ColorChooser --------------------------
-
-	yB := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
-	cardStartB := yB
-
-	s.textLabel = toolkit.NewLabel("TextView")
-	s.textLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
-
+	// --- Column B widgets — CONSTRUCTION ONLY (placement owned by colB) ---
 	s.textView = toolkit.NewTextView("Multi-line editor.\nType to insert.\nEnter splits a line.\nArrow keys navigate.")
-	s.textView.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 110})
-	yB += 110
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
-	yB += sectPad
-	cardStartB = yB
-
-	s.calLabel = toolkit.NewLabel("Calendar")
-	s.calLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
 
 	s.calendar = toolkit.NewCalendar(2026, 7, 2)
 	s.calendar.SetToday(2026, 7, 2)
-	s.calendar.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 180})
-	yB += 180
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
-	yB += sectPad
-	cardStartB = yB
-
-	s.colorLabel = toolkit.NewLabel("ColorChooser")
-	s.colorLabel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
 
 	s.colorChoose = toolkit.NewColorChooser(toolkit.RGB(0x0d, 0x94, 0x88))
-	s.colorChoose.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 130})
-	yB += 130
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C: Selection & Structure ---------------------------------
 
@@ -563,66 +529,34 @@ func newState(w, h int) *state {
 	s.stepsV = toolkit.NewSteps([]string{"Plan", "Build", "Ship"}, 1)
 	s.stepsV.Orientation = toolkit.Vertical
 
-	// --- Column B extension: Wave 2 (v0.8) highlights -------------------
-
-	yB += sectPad
-	cardStartB = yB
-
-	s.wave2Label = toolkit.NewLabel("Wave 2 (v0.8)")
-	s.wave2Label.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
-
+	// --- Column B extension: Wave 2 (v0.8) — construction only ----------
 	s.headerBar = toolkit.NewHeaderBar("Files")
 	s.headerBar.Subtitle = "~/Documents"
-	s.headerBar.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 36})
-	yB += 36 + sectGap
 
 	s.toast = toolkit.NewToast("Copied to clipboard", toolkit.ToastSuccess)
 	s.toast.Visible = true
-	s.toast.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 24})
-	yB += 24 + sectGap
 
 	s.banner = toolkit.NewBanner("Update available.")
 	s.banner.ButtonLabel = "Install"
 	s.banner.OnAction = func() { s.showNotify("Banner action clicked") }
-	s.banner.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 24})
-	yB += 24 + sectGap
 
 	s.diff = toolkit.NewDiff([]toolkit.DiffLine{
 		{Text: "package main", Kind: toolkit.DiffContext},
 		{Text: "old line", Kind: toolkit.DiffRemoved},
 		{Text: "new line", Kind: toolkit.DiffAdded},
 	})
-	s.diff.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 54})
-	yB += 54
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
-	// --- Column B extension: Wave 4 (v0.33) highlights -------------------
+	// --- Column B extension: Wave 4 (v0.33) — construction only ---------
 	//
-	// A second, smaller Notebook with its tab strip on the left
-	// (Notebook.TabSide = TabLeft) sits above a second DropDown that
-	// opens its popover upward (DropDown.OpenUp), the natural choice
-	// for a control this close to the Statusbar.
-
-	yB += sectPad
-	cardStartB = yB
-
-	s.wave4LabelB = toolkit.NewLabel("Wave 4 (v0.33)")
-	s.wave4LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
-
+	// A second Notebook with its tab strip on the left (TabSide = TabLeft)
+	// above a DropDown that opens its popover upward (OpenUp).
 	s.notebookSide = toolkit.NewNotebook()
 	s.notebookSide.TabSide = toolkit.TabLeft
 	s.notebookSide.AddTab("A", toolkit.NewLabel("Tabs on the left"))
 	s.notebookSide.AddTab("B", toolkit.NewLabel("(TabSide = TabLeft)"))
-	s.notebookSide.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 70})
-	yB += 70 + sectGap
 
 	s.dropdownUp = toolkit.NewDropDown([]string{"Opens upward", "OpenUp = true"}, 0)
 	s.dropdownUp.OpenUp = true
-	s.dropdownUp.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 26})
-	yB += 26
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C extension: Wave 3 (v0.9) highlights -------------------
 
@@ -720,40 +654,19 @@ func newState(w, h int) *state {
 		{Value: 20, Fill: toolkit.RGB(0xc0, 0xbf, 0xbc), Label: "free"},
 	})
 
-	// --- Column B extension: Wave 5 (v0.42) highlights -------------------
-	//
-	// Carousel (three paged slides) sits above a MarkdownEditor (live
-	// source/preview split) and a DateRangePicker (two-endpoint month
-	// grid selection), the v0.42 text/time-family additions.
-
-	yB += sectPad
-	cardStartB = yB
-
-	s.wave5LabelB = toolkit.NewLabel("Wave 5 (v0.42)")
-	s.wave5LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
-
+	// --- Column B extension: Wave 5 (v0.42) — construction only ---------
 	s.carousel = toolkit.NewCarousel([]toolkit.Widget{
 		toolkit.NewCard("Slide 1", "First featured panel.", ""),
 		toolkit.NewCard("Slide 2", "Second featured panel.", ""),
 		toolkit.NewCard("Slide 3", "Third featured panel.", ""),
 	})
 	s.carousel.Wrap = true
-	const carouselH = 74 + 16 // content + dots strip
-	s.carousel.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: carouselH})
-	yB += carouselH + sectGap
 
 	s.mdEditor = toolkit.NewMarkdownEditor("# Notes\n\n- live *preview*\n- side by side")
-	const mdEditorH = 90
-	s.mdEditor.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: mdEditorH})
-	yB += mdEditorH + sectGap
 
 	s.dateRange = toolkit.NewDateRangePicker(2026, 7)
 	s.dateRange.Start = toolkit.Date{Y: 2026, M: 7, D: 10}
 	s.dateRange.End = toolkit.Date{Y: 2026, M: 7, D: 17}
-	s.dateRange.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: 168})
-	yB += 168
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C extension: Wave 5 (v0.42) highlights -------------------
 	//
@@ -818,18 +731,10 @@ func newState(w, h int) *state {
 	s.pagingBar = toolkit.NewPagingToolbar(6, 12)
 	s.pagingBar.ShowRefresh = true
 
-	// --- Column B extension: Wave 6 (v0.81) highlights -------------------
+	// --- Column B extension: Wave 6 (v0.81) — construction only ---------
 	//
 	// A Table showing collapsible group rows (grouped by the first column)
 	// with an inline cell editor open over an editable cell.
-
-	yB += sectPad
-	cardStartB = yB
-
-	s.wave6LabelB = toolkit.NewLabel("Wave 6 (v0.81)")
-	s.wave6LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
-	yB += toolkit.GlyphHeight() + sectGap
-
 	s.gridEdit = toolkit.NewTable(
 		[]toolkit.TableColumn{
 			{Title: "Status", Width: 90},
@@ -844,13 +749,9 @@ func newState(w, h int) *state {
 		},
 	)
 	s.gridEdit.GroupBy = 0
-	const gridEditH = toolkit.TableHeaderHeight + 7*toolkit.TableRowHeight
-	s.gridEdit.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: gridEditH})
 	// Open the Owner editor on the first data row (visual line 1).
 	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: 130, Y: toolkit.TableHeaderHeight + toolkit.TableRowHeight + 2})
 	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventChar, Code: "!"})
-	yB += gridEditH
-	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
 
 	// --- Column C extension: Wave 6 (v0.81) highlights -------------------
 	//
@@ -933,6 +834,28 @@ func newState(w, h int) *state {
 		[]int{hActions, hInputs, hFeedback, hNotebook, hWave1, hWave4, hWave5, hWave6})
 	colATop := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
 	s.colA.SetBounds(toolkit.Rect{X: colAX, Y: colATop, W: colW, H: totalA})
+
+	// --- Column B, re-composed with the box-layout system ----------------
+	carouselH6 := 74 + 16
+	mdEditorH6 := 90
+	gridEditH6 := toolkit.TableHeaderHeight + 7*toolkit.TableRowHeight
+
+	fText, hText := sectionFrame("TextView", sectGap, boxItem{s.textView, 110})
+	fCal, hCal := sectionFrame("Calendar", sectGap, boxItem{s.calendar, 180})
+	fColor, hColor := sectionFrame("ColorChooser", sectGap, boxItem{s.colorChoose, 130})
+	fWave2, hWave2 := sectionFrame("Wave 2 (v0.8)", sectGap,
+		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, 54})
+	fWave4B, hWave4B := sectionFrame("Wave 4 (v0.33)", sectGap,
+		boxItem{s.notebookSide, 70}, boxItem{s.dropdownUp, 26})
+	fWave5B, hWave5B := sectionFrame("Wave 5 (v0.42)", sectGap,
+		boxItem{s.carousel, carouselH6}, boxItem{s.mdEditor, mdEditorH6}, boxItem{s.dateRange, 168})
+	fWave6B, hWave6B := sectionFrame("Wave 6 (v0.81)", sectGap, boxItem{s.gridEdit, gridEditH6})
+
+	var totalB int
+	s.colB, totalB = column(
+		[]*toolkit.Frame{fText, fCal, fColor, fWave2, fWave4B, fWave5B, fWave6B},
+		[]int{hText, hCal, hColor, hWave2, hWave4B, hWave5B, hWave6B})
+	s.colB.SetBounds(toolkit.Rect{X: colBX, Y: colATop, W: colW, H: totalB})
 
 	// --- click routing table --------------------------------------------
 
@@ -1024,13 +947,10 @@ func (s *state) draw(buf []byte) {
 	// hand-drawn Column-A widgets, section Labels and card borders.
 	s.colA.Draw(p, s.theme)
 
-	// Column B — Text & Time.
-	s.textLabel.Draw(p, s.theme)
-	s.textView.Draw(p, s.theme)
-	s.calLabel.Draw(p, s.theme)
-	s.calendar.Draw(p, s.theme)
-	s.colorLabel.Draw(p, s.theme)
-	s.colorChoose.Draw(p, s.theme)
+	// Column B — every section, composed with the box-layout system (see the
+	// colB build in newState). Replaces the hand-drawn Column-B widgets,
+	// section Labels and card borders.
+	s.colB.Draw(p, s.theme)
 
 	// Column C — Selection & Structure.
 	s.listLabel.Draw(p, s.theme)
@@ -1042,13 +962,6 @@ func (s *state) draw(buf []byte) {
 	s.panedLabel.Draw(p, s.theme)
 	s.paned.Draw(p, s.theme)
 
-	// Column B — Wave 2 (v0.8) highlights.
-	s.wave2Label.Draw(p, s.theme)
-	s.headerBar.Draw(p, s.theme)
-	s.toast.Draw(p, s.theme)
-	s.banner.Draw(p, s.theme)
-	s.diff.Draw(p, s.theme)
-
 	// Column C — Wave 3 (v0.9) highlights.
 	s.wave3Label.Draw(p, s.theme)
 	s.stat.Draw(p, s.theme)
@@ -1057,21 +970,10 @@ func (s *state) draw(buf []byte) {
 	s.chip.Draw(p, s.theme)
 	s.splitButton.Draw(p, s.theme)
 
-	// Column B — Wave 4 (v0.33) highlights: side-tab Notebook + upward DropDown.
-	s.wave4LabelB.Draw(p, s.theme)
-	s.notebookSide.Draw(p, s.theme)
-	s.dropdownUp.Draw(p, s.theme)
-
 	// Column C — Wave 4 (v0.33) highlights: right-aligned Table + horizontal Timeline.
 	s.wave4LabelC.Draw(p, s.theme)
 	s.table.Draw(p, s.theme)
 	s.timelineH.Draw(p, s.theme)
-
-	// Column B — Wave 5 (v0.42) highlights: Carousel + MarkdownEditor + DateRangePicker.
-	s.wave5LabelB.Draw(p, s.theme)
-	s.carousel.Draw(p, s.theme)
-	s.mdEditor.Draw(p, s.theme)
-	s.dateRange.Draw(p, s.theme)
 
 	// Column C — Wave 5 (v0.42) highlights: Wizard + TreeTable + CommandPalette trigger.
 	s.wave5LabelC.Draw(p, s.theme)
@@ -1079,9 +981,7 @@ func (s *state) draw(buf []byte) {
 	s.treeTable.Draw(p, s.theme)
 	s.paletteBtn.Draw(p, s.theme)
 
-	// Wave 6 (v0.81) — grid-editing family (Column A is in colA above).
-	s.wave6LabelB.Draw(p, s.theme)
-	s.gridEdit.Draw(p, s.theme)
+	// Wave 6 (v0.81) — Columns A & B are in colA/colB above; only C's here.
 	s.wave6LabelC.Draw(p, s.theme)
 	s.dataView.Draw(p, s.theme)
 
