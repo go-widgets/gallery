@@ -1,11 +1,13 @@
 // gallerymenu.go — the right-click edit menu. Kept tagless (like scene.go) so
 // a native go test exercises it without the js && wasm build tag.
 //
-// handleContext hit-tests the interactive Wave-7 widgets (Kanban / Gantt /
-// Agenda) via their exported CardAt / TaskAt / DayAt helpers, builds an edit
-// Menu for the item under the cursor, and pops the shared ContextMenu at the
-// click point. The menu actions mutate the widgets through their public API
-// (Kanban.MoveCard, the exported Tasks/Columns slices, the MVVM event list).
+// handleContext hit-tests the editable widgets — Kanban / Gantt / Agenda plus
+// the data widgets ListBox / Table / TreeView — via their exported hit helpers
+// (CardAt / TaskAt / DayAt / IndexAt / RowAt / NodeAt), builds an edit Menu for
+// the item under the cursor, and pops the shared ContextMenu at the click
+// point. The menu actions mutate the widgets through their public API
+// (Kanban.MoveCard, TreeView.Remove, the exported Tasks/Columns/Rows/Items
+// slices, the MVVM event list).
 
 package main
 
@@ -33,6 +35,27 @@ func (s *state) handleContext(x, y int) bool {
 	if r := s.agenda.Bounds(); inside(x, y, r) && s.agenda.View == toolkit.AgendaMonth {
 		if yy, m, d, ok := s.agenda.DayAt(x-r.X, y-r.Y); ok {
 			s.ctxMenu.Menu = s.agendaMenu(yy, m, d)
+			s.ctxMenu.Popup(x, y)
+			return true
+		}
+	}
+	if r := s.listBox.Bounds(); inside(x, y, r) {
+		if i := s.listBox.IndexAt(x-r.X, y-r.Y); i >= 0 {
+			s.ctxMenu.Menu = s.listMenu(i)
+			s.ctxMenu.Popup(x, y)
+			return true
+		}
+	}
+	if r := s.table.Bounds(); inside(x, y, r) {
+		if row := s.table.RowAt(x-r.X, y-r.Y); row >= 0 {
+			s.ctxMenu.Menu = s.tableMenu(row)
+			s.ctxMenu.Popup(x, y)
+			return true
+		}
+	}
+	if r := s.tree.Bounds(); inside(x, y, r) {
+		if node := s.tree.NodeAt(x-r.X, y-r.Y); node != nil {
+			s.ctxMenu.Menu = s.treeMenu(node)
 			s.ctxMenu.Popup(x, y)
 			return true
 		}
@@ -131,4 +154,109 @@ func (s *state) agendaMenu(y, m, d int) *toolkit.Menu {
 			s.showNotify("Added event on " + itoa(m) + "/" + itoa(d))
 		}},
 	})
+}
+
+// listMenu builds the edit menu for ListBox item i: reorder it, duplicate it,
+// or delete it. Selected is kept valid after the edit.
+func (s *state) listMenu(i int) *toolkit.Menu {
+	items := func() []string { return s.listBox.Items }
+	return toolkit.NewMenu([]toolkit.MenuItem{
+		{Label: "Move up", Action: func() {
+			if it := items(); i > 0 && i < len(it) {
+				it[i-1], it[i] = it[i], it[i-1]
+				s.listBox.Selected = i - 1
+				s.showNotify("Item moved up")
+			}
+		}},
+		{Label: "Move down", Action: func() {
+			if it := items(); i >= 0 && i < len(it)-1 {
+				it[i+1], it[i] = it[i], it[i+1]
+				s.listBox.Selected = i + 1
+				s.showNotify("Item moved down")
+			}
+		}},
+		{Separator: true},
+		{Label: "Duplicate", Action: func() {
+			if it := items(); i >= 0 && i < len(it) {
+				it = append(it, "")
+				copy(it[i+2:], it[i+1:])
+				it[i+1] = it[i]
+				s.listBox.Items = it
+				s.showNotify("Item duplicated")
+			}
+		}},
+		{Label: "Delete", Action: func() {
+			if it := items(); i >= 0 && i < len(it) {
+				s.listBox.Items = append(it[:i], it[i+1:]...)
+				s.listBox.Selected = -1
+				s.showNotify("Item deleted")
+			}
+		}},
+	})
+}
+
+// tableMenu builds the edit menu for Table row: reorder, duplicate or delete it.
+func (s *state) tableMenu(row int) *toolkit.Menu {
+	rows := func() [][]string { return s.table.Rows }
+	return toolkit.NewMenu([]toolkit.MenuItem{
+		{Label: "Move up", Action: func() {
+			if r := rows(); row > 0 && row < len(r) {
+				r[row-1], r[row] = r[row], r[row-1]
+				s.showNotify("Row moved up")
+			}
+		}},
+		{Label: "Move down", Action: func() {
+			if r := rows(); row >= 0 && row < len(r)-1 {
+				r[row+1], r[row] = r[row], r[row+1]
+				s.showNotify("Row moved down")
+			}
+		}},
+		{Separator: true},
+		{Label: "Duplicate row", Action: func() {
+			if r := rows(); row >= 0 && row < len(r) {
+				dup := append([]string(nil), r[row]...)
+				r = append(r, nil)
+				copy(r[row+2:], r[row+1:])
+				r[row+1] = dup
+				s.table.Rows = r
+				s.showNotify("Row duplicated")
+			}
+		}},
+		{Label: "Delete row", Action: func() {
+			if r := rows(); row >= 0 && row < len(r) {
+				s.table.Rows = append(r[:row], r[row+1:]...)
+				s.showNotify("Row deleted")
+			}
+		}},
+	})
+}
+
+// treeMenu builds the edit menu for TreeView node: add a child, toggle its
+// expansion (only when it has children), or delete it (never the root).
+func (s *state) treeMenu(node *toolkit.TreeNode) *toolkit.Menu {
+	items := []toolkit.MenuItem{
+		{Label: "Add child", Action: func() {
+			node.Children = append(node.Children, &toolkit.TreeNode{Label: "child " + itoa(len(node.Children)+1)})
+			node.Expanded = true
+			s.showNotify("Child added to " + node.Label)
+		}},
+	}
+	if len(node.Children) > 0 {
+		items = append(items, toolkit.MenuItem{Label: "Toggle expand", Action: func() {
+			node.Expanded = !node.Expanded
+			s.showNotify("Toggled " + node.Label)
+		}})
+	}
+	if node != s.tree.Root {
+		items = append(items, toolkit.MenuItem{Separator: true})
+		items = append(items, toolkit.MenuItem{Label: "Delete node", Action: func() {
+			if s.tree.Remove(node) {
+				if s.tree.Selected == node {
+					s.tree.Selected = nil
+				}
+				s.showNotify("Node deleted")
+			}
+		}})
+	}
+	return toolkit.NewMenu(items)
 }
