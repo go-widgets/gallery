@@ -288,6 +288,14 @@ func column(frames []*toolkit.Frame, heights []int) (*toolkit.VBox, int) {
 // near the end), so adding widgets grows the surface automatically. The second
 // parameter is ignored (kept only so existing call sites compile); pass 0.
 func newState(w, _ int) *state {
+	// Switch the whole toolkit to anti-aliased, shaped go-opentype text (the
+	// bundled Atkinson Hyperlegible face) instead of the built-in 5x7 bitmap
+	// font, so the gallery renders crisp AA text and dogfoods go-opentype. Done
+	// FIRST, before any layout below measures text widths, so widths + rendering
+	// agree. The bundled face never fails to parse; on the impossible error the
+	// toolkit keeps the bitmap default. Idempotent across newState calls.
+	_ = toolkit.UseOpenTypeText()
+
 	s := &state{w: w, theme: toolkit.DefaultLight()}
 
 	// --- top scaffold -----------------------------------------------------
