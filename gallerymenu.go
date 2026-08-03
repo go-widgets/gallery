@@ -13,10 +13,11 @@ package main
 
 import "github.com/go-widgets/toolkit"
 
-// handleContext opens the edit context menu for the Kanban card, Gantt task or
-// month-view Agenda day under (x, y) (surface coords). It returns whether the
-// scene changed (a menu opened, or an already-open menu was dismissed) so the
-// host re-renders.
+// handleContext opens the edit context menu for whatever editable item is under
+// (x, y) (surface coords): a Kanban card, Gantt task, month-view Agenda day, or
+// a row/item/node of any ListBox / Table / TreeView in the scene. It returns
+// whether the scene changed (a menu opened, or an already-open menu was
+// dismissed) so the host re-renders.
 func (s *state) handleContext(x, y int) bool {
 	if r := s.kanban.Bounds(); inside(x, y, r) {
 		if col, card := s.kanban.CardAt(x-r.X, y-r.Y); col >= 0 {
@@ -39,25 +40,34 @@ func (s *state) handleContext(x, y int) bool {
 			return true
 		}
 	}
-	if r := s.listBox.Bounds(); inside(x, y, r) {
-		if i := s.listBox.IndexAt(x-r.X, y-r.Y); i >= 0 {
-			s.ctxMenu.Menu = s.listMenu(i)
-			s.ctxMenu.Popup(x, y)
-			return true
+	// The data widgets share one generic path, so every ListBox / Table /
+	// TreeView instance in the gallery (not just one of each) gets the same
+	// edit menu.
+	for _, lb := range []*toolkit.ListBox{s.listBox, s.dataView} {
+		if r := lb.Bounds(); inside(x, y, r) {
+			if i := lb.IndexAt(x-r.X, y-r.Y); i >= 0 {
+				s.ctxMenu.Menu = s.listMenu(lb, i)
+				s.ctxMenu.Popup(x, y)
+				return true
+			}
 		}
 	}
-	if r := s.table.Bounds(); inside(x, y, r) {
-		if row := s.table.RowAt(x-r.X, y-r.Y); row >= 0 {
-			s.ctxMenu.Menu = s.tableMenu(row)
-			s.ctxMenu.Popup(x, y)
-			return true
+	for _, tb := range []*toolkit.Table{s.table, s.gridEdit} {
+		if r := tb.Bounds(); inside(x, y, r) {
+			if row := tb.RowAt(x-r.X, y-r.Y); row >= 0 {
+				s.ctxMenu.Menu = s.tableMenu(tb, row)
+				s.ctxMenu.Popup(x, y)
+				return true
+			}
 		}
 	}
-	if r := s.tree.Bounds(); inside(x, y, r) {
-		if node := s.tree.NodeAt(x-r.X, y-r.Y); node != nil {
-			s.ctxMenu.Menu = s.treeMenu(node)
-			s.ctxMenu.Popup(x, y)
-			return true
+	for _, tv := range []*toolkit.TreeView{s.tree} {
+		if r := tv.Bounds(); inside(x, y, r) {
+			if node := tv.NodeAt(x-r.X, y-r.Y); node != nil {
+				s.ctxMenu.Menu = s.treeMenu(tv, node)
+				s.ctxMenu.Popup(x, y)
+				return true
+			}
 		}
 	}
 	// Nothing editable under the cursor: dismiss any open menu.
@@ -156,22 +166,23 @@ func (s *state) agendaMenu(y, m, d int) *toolkit.Menu {
 	})
 }
 
-// listMenu builds the edit menu for ListBox item i: reorder it, duplicate it,
-// or delete it. Selected is kept valid after the edit.
-func (s *state) listMenu(i int) *toolkit.Menu {
-	items := func() []string { return s.listBox.Items }
+// listMenu builds the edit menu for item i of ListBox lb: reorder it, duplicate
+// it, or delete it. Selected is kept valid after the edit. lb is a parameter so
+// the same menu serves every ListBox in the scene.
+func (s *state) listMenu(lb *toolkit.ListBox, i int) *toolkit.Menu {
+	items := func() []string { return lb.Items }
 	return toolkit.NewMenu([]toolkit.MenuItem{
 		{Label: "Move up", Action: func() {
 			if it := items(); i > 0 && i < len(it) {
 				it[i-1], it[i] = it[i], it[i-1]
-				s.listBox.Selected = i - 1
+				lb.Selected = i - 1
 				s.showNotify("Item moved up")
 			}
 		}},
 		{Label: "Move down", Action: func() {
 			if it := items(); i >= 0 && i < len(it)-1 {
 				it[i+1], it[i] = it[i], it[i+1]
-				s.listBox.Selected = i + 1
+				lb.Selected = i + 1
 				s.showNotify("Item moved down")
 			}
 		}},
@@ -181,23 +192,24 @@ func (s *state) listMenu(i int) *toolkit.Menu {
 				it = append(it, "")
 				copy(it[i+2:], it[i+1:])
 				it[i+1] = it[i]
-				s.listBox.Items = it
+				lb.Items = it
 				s.showNotify("Item duplicated")
 			}
 		}},
 		{Label: "Delete", Action: func() {
 			if it := items(); i >= 0 && i < len(it) {
-				s.listBox.Items = append(it[:i], it[i+1:]...)
-				s.listBox.Selected = -1
+				lb.Items = append(it[:i], it[i+1:]...)
+				lb.Selected = -1
 				s.showNotify("Item deleted")
 			}
 		}},
 	})
 }
 
-// tableMenu builds the edit menu for Table row: reorder, duplicate or delete it.
-func (s *state) tableMenu(row int) *toolkit.Menu {
-	rows := func() [][]string { return s.table.Rows }
+// tableMenu builds the edit menu for row of Table tb: reorder, duplicate or
+// delete it. tb is a parameter so the same menu serves every Table in the scene.
+func (s *state) tableMenu(tb *toolkit.Table, row int) *toolkit.Menu {
+	rows := func() [][]string { return tb.Rows }
 	return toolkit.NewMenu([]toolkit.MenuItem{
 		{Label: "Move up", Action: func() {
 			if r := rows(); row > 0 && row < len(r) {
@@ -218,22 +230,23 @@ func (s *state) tableMenu(row int) *toolkit.Menu {
 				r = append(r, nil)
 				copy(r[row+2:], r[row+1:])
 				r[row+1] = dup
-				s.table.Rows = r
+				tb.Rows = r
 				s.showNotify("Row duplicated")
 			}
 		}},
 		{Label: "Delete row", Action: func() {
 			if r := rows(); row >= 0 && row < len(r) {
-				s.table.Rows = append(r[:row], r[row+1:]...)
+				tb.Rows = append(r[:row], r[row+1:]...)
 				s.showNotify("Row deleted")
 			}
 		}},
 	})
 }
 
-// treeMenu builds the edit menu for TreeView node: add a child, toggle its
+// treeMenu builds the edit menu for node of TreeView tv (a parameter so it
+// serves every TreeView): add a child, toggle its
 // expansion (only when it has children), or delete it (never the root).
-func (s *state) treeMenu(node *toolkit.TreeNode) *toolkit.Menu {
+func (s *state) treeMenu(tv *toolkit.TreeView, node *toolkit.TreeNode) *toolkit.Menu {
 	items := []toolkit.MenuItem{
 		{Label: "Add child", Action: func() {
 			node.Children = append(node.Children, &toolkit.TreeNode{Label: "child " + itoa(len(node.Children)+1)})
@@ -247,12 +260,12 @@ func (s *state) treeMenu(node *toolkit.TreeNode) *toolkit.Menu {
 			s.showNotify("Toggled " + node.Label)
 		}})
 	}
-	if node != s.tree.Root {
+	if node != tv.Root {
 		items = append(items, toolkit.MenuItem{Separator: true})
 		items = append(items, toolkit.MenuItem{Label: "Delete node", Action: func() {
-			if s.tree.Remove(node) {
-				if s.tree.Selected == node {
-					s.tree.Selected = nil
+			if tv.Remove(node) {
+				if tv.Selected == node {
+					tv.Selected = nil
 				}
 				s.showNotify("Node deleted")
 			}
