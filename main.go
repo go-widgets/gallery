@@ -42,25 +42,35 @@ func main() {
 	}
 	render()
 
-	// Mouse dispatch: use the canvas bounding-rect to convert
-	// clientX/Y to canvas-local pixel coords. This is where a real
-	// event loop would sit; keeping it inline for clarity.
-	cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) == 0 {
-			return nil
-		}
-		ev := args[0]
+	// Mouse dispatch: convert clientX/Y to canvas-local pixel coords via the
+	// bounding-rect, then route the full press / drag / release lifecycle so
+	// draggable widgets (Kanban cards, Gantt bars) work, not just clicks.
+	// mousedown is the press (EventClick grabs), mousemove is a drag tick
+	// (routed only while a target is captured), mouseup releases.
+	coords := func(ev js.Value) (int, int) {
 		rect := canvas.Call("getBoundingClientRect")
 		sx := rect.Get("width").Float() / float64(surfaceW)
 		sy := rect.Get("height").Float() / float64(surfaceH)
 		x := int((ev.Get("clientX").Float() - rect.Get("left").Float()) / sx)
 		y := int((ev.Get("clientY").Float() - rect.Get("top").Float()) / sy)
-		if state.handleClick(x, y) {
-			render()
-		}
-		return nil
-	})
-	canvas.Call("addEventListener", "click", cb)
+		return x, y
+	}
+	listen := func(name string, handle func(x, y int) bool) {
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) == 0 {
+				return nil
+			}
+			x, y := coords(args[0])
+			if handle(x, y) {
+				render()
+			}
+			return nil
+		})
+		canvas.Call("addEventListener", name, cb)
+	}
+	listen("mousedown", state.handleClick)
+	listen("mousemove", state.handleDrag)
+	listen("mouseup", state.handleRelease)
 
 	// A 60-Hz tick drives the Notification.Life countdown so toasts
 	// auto-hide. setInterval doesn't need a huge slice of allocs
