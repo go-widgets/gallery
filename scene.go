@@ -20,7 +20,7 @@ import (
 // labelled slot rather than being hidden behind a Notebook tab.
 const (
 	surfaceW = 960
-	surfaceH = 1303
+	surfaceH = 1483
 )
 
 // themeRowH sizes the ViewSwitcher strip sitting between the Toolbar
@@ -165,6 +165,19 @@ type state struct {
 	paletteBtn  *toolkit.Button
 	cmdPalette  *toolkit.CommandPalette
 
+	// Wave 6 (v0.81) highlights — the Table grid-editing family + the
+	// widgets it enabled. Column A: a PropertyGrid (editable Name/Value)
+	// above a PagingToolbar. Column B: a Table showing grouped rows + an
+	// open inline cell editor. Column C: a ListBox with a DataView
+	// ItemRenderer painting rich two-line rows.
+	wave6LabelA *toolkit.Label
+	propGrid    *toolkit.PropertyGrid
+	pagingBar   *toolkit.PagingToolbar
+	wave6LabelB *toolkit.Label
+	gridEdit    *toolkit.Table
+	wave6LabelC *toolkit.Label
+	dataView    *toolkit.ListBox
+
 	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
 	// Each segment installs a distinct palette so the whole scene
 	// repaints on click — validates that the toolkit's Theme value
@@ -235,11 +248,11 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.showNotify("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.showNotify("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.42.0") }},
+		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.81.0") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"~85 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.42.0"})
+	s.status = toolkit.NewStatusbar([]string{"~90 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.81.0"})
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
@@ -827,6 +840,108 @@ func newState(w, h int) *state {
 	yC += 28
 	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
 
+	// --- Column A extension: Wave 6 (v0.81) highlights -------------------
+	//
+	// A PropertyGrid (2-column Name/Value, Value inline-editable) above a
+	// PagingToolbar (First/Prev/"Page N of M"/Next/Last + Refresh) -- the
+	// grid-editing family's record-navigation footer.
+
+	y += sectPad
+	cardStart = y
+
+	s.wave6LabelA = toolkit.NewLabel("Wave 6 (v0.81)")
+	s.wave6LabelA.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.GlyphHeight()})
+	y += toolkit.GlyphHeight() + sectGap
+
+	s.propGrid = toolkit.NewPropertyGrid()
+	s.propGrid.Add("Width", "1024")
+	s.propGrid.Add("Height", "768")
+	s.propGrid.Add("Title", "Untitled")
+	s.propGrid.Add("Visible", "true")
+	s.propGrid.Table().Selected = 2
+	const propGridH = toolkit.TableHeaderHeight + 4*toolkit.TableRowHeight
+	s.propGrid.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: propGridH})
+	// Open the editor on the "Title" value cell so the demo shows editing.
+	s.propGrid.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: colW - 40, Y: toolkit.TableHeaderHeight + 2*toolkit.TableRowHeight + 2})
+	y += propGridH + sectGap
+
+	s.pagingBar = toolkit.NewPagingToolbar(6, 12)
+	s.pagingBar.ShowRefresh = true
+	s.pagingBar.SetBounds(toolkit.Rect{X: colAX, Y: y, W: colW, H: toolkit.PagingBtnH})
+	y += toolkit.PagingBtnH
+	s.pushCard(colAX, cardStart, colW, y-cardStart)
+
+	// --- Column B extension: Wave 6 (v0.81) highlights -------------------
+	//
+	// A Table showing collapsible group rows (grouped by the first column)
+	// with an inline cell editor open over an editable cell.
+
+	yB += sectPad
+	cardStartB = yB
+
+	s.wave6LabelB = toolkit.NewLabel("Wave 6 (v0.81)")
+	s.wave6LabelB.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: toolkit.GlyphHeight()})
+	yB += toolkit.GlyphHeight() + sectGap
+
+	s.gridEdit = toolkit.NewTable(
+		[]toolkit.TableColumn{
+			{Title: "Status", Width: 90},
+			{Title: "Owner", Width: 90, Editable: true},
+			{Title: "Task"},
+		},
+		[][]string{
+			{"in-progress", "alice", "Cell editing"},
+			{"in-progress", "bob", "Group rows"},
+			{"todo", "carol", "Frozen cols"},
+			{"done", "dave", "Panels"},
+		},
+	)
+	s.gridEdit.GroupBy = 0
+	const gridEditH = toolkit.TableHeaderHeight + 7*toolkit.TableRowHeight
+	s.gridEdit.SetBounds(toolkit.Rect{X: colBX, Y: yB, W: colW, H: gridEditH})
+	// Open the Owner editor on the first data row (visual line 1).
+	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: 130, Y: toolkit.TableHeaderHeight + toolkit.TableRowHeight + 2})
+	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventChar, Code: "!"})
+	yB += gridEditH
+	s.pushCard(colBX, cardStartB, colW, yB-cardStartB)
+
+	// --- Column C extension: Wave 6 (v0.81) highlights -------------------
+	//
+	// A ListBox with a DataView ItemRenderer: each row draws a colour
+	// swatch + a two-line title/subtitle instead of the default text.
+
+	yC += sectPad
+	cardStartC = yC
+
+	s.wave6LabelC = toolkit.NewLabel("Wave 6 (v0.81)")
+	s.wave6LabelC.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: toolkit.GlyphHeight()})
+	yC += toolkit.GlyphHeight() + sectGap
+
+	dvSubs := []string{"12 unread · 2m ago", "3 unread · 1h ago", "all read · yesterday", "8 unread · 5m ago"}
+	dvSwatch := []toolkit.RGBA{toolkit.RGB(0xe0, 0x50, 0x50), toolkit.RGB(0x50, 0xa0, 0xe0), toolkit.RGB(0x50, 0xb0, 0x70), toolkit.RGB(0xc0, 0x80, 0xe0)}
+	s.dataView = toolkit.NewListBox([]string{"Reddit", "Hacker News", "Lobsters", "GitHub"})
+	s.dataView.RowHeight = 32
+	s.dataView.Selected = 1
+	s.dataView.ItemRenderer = func(p painter.Painter, theme *toolkit.Theme, rc toolkit.Rect, i int, item string, sel bool, ink toolkit.RGBA) {
+		p.FillRect(painter.Rect{X: rc.X + 8, Y: rc.Y + rc.H/2 - 6, W: 12, H: 12}, dvSwatch[i])
+		title := toolkit.NewLabel(item)
+		title.Ink = ink
+		title.SetBounds(toolkit.Rect{X: rc.X + 28, Y: rc.Y + 4, W: rc.W - 32, H: 14})
+		title.Draw(p, theme)
+		sub := toolkit.NewLabel(dvSubs[i])
+		subInk := ink
+		if !sel {
+			subInk = toolkit.RGB(0x90, 0x90, 0x90)
+		}
+		sub.Ink = subInk
+		sub.SetBounds(toolkit.Rect{X: rc.X + 28, Y: rc.Y + 18, W: rc.W - 32, H: 12})
+		sub.Draw(p, theme)
+	}
+	const dataViewH = 4 * 32
+	s.dataView.SetBounds(toolkit.Rect{X: colCX, Y: yC, W: colW, H: dataViewH})
+	yC += dataViewH
+	s.pushCard(colCX, cardStartC, colW, yC-cardStartC)
+
 	// --- click routing table --------------------------------------------
 
 	s.clickables = []toolkit.Widget{
@@ -1003,6 +1118,15 @@ func (s *state) draw(buf []byte) {
 	s.wizard.Draw(p, s.theme)
 	s.treeTable.Draw(p, s.theme)
 	s.paletteBtn.Draw(p, s.theme)
+
+	// Wave 6 (v0.81) — grid-editing family.
+	s.wave6LabelA.Draw(p, s.theme)
+	s.propGrid.Draw(p, s.theme)
+	s.pagingBar.Draw(p, s.theme)
+	s.wave6LabelB.Draw(p, s.theme)
+	s.gridEdit.Draw(p, s.theme)
+	s.wave6LabelC.Draw(p, s.theme)
+	s.dataView.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
