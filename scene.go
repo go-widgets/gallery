@@ -193,6 +193,11 @@ type state struct {
 	// Command (see viewmodel.go).
 	vm *viewModel
 
+	// ctxMenu is the right-click edit menu (surface-sized overlay). Its Menu is
+	// rebuilt per popup for the Kanban card / Gantt task / Agenda day under the
+	// cursor (see gallerymenu.go).
+	ctxMenu *toolkit.ContextMenu
+
 	// App-shell demo: a Border with a COLLAPSIBLE sidebar (a Frame.Collapsible
 	// in the West region) and a draggable splitter GRIP (Border.WestSplit),
 	// its Center hosting a Paned whose handle is a second grip. Demonstrates
@@ -798,6 +803,10 @@ func newState(w, _ int) *state {
 	// Constructed here, once every bound widget exists.
 	s.vm = newViewModel(s)
 
+	// Right-click edit menu (its Menu is rebuilt per popup; bounds set below
+	// once the surface height is known).
+	s.ctxMenu = toolkit.NewContextMenu(toolkit.NewMenu(nil))
+
 	// App-shell: collapsible sidebar (Frame.Collapsible in a Border West
 	// region) + splitter grips (Border.WestSplit + the Paned handle).
 	nav := toolkit.NewVBox()
@@ -920,10 +929,10 @@ func newState(w, _ int) *state {
 	// column, so they stack in a full-bleed VBox under the 3-column grid.
 	fShell, hShell := sectionFrame("App shell — collapsible sidebar + splitter grips (v0.63)", sectGap,
 		boxItem{s.appBorder, 130})
-	fAgenda, hAgenda := sectionFrame("Agenda (v0.83) — switch views above, click an empty day to add", sectGap,
+	fAgenda, hAgenda := sectionFrame("Agenda (v0.84) — switch views above; click or right-click an empty day to add", sectGap,
 		boxItem{s.agendaSwitcher, 28}, boxItem{s.agenda, 272})
-	fKanban, hKanban := sectionFrame("Kanban board (v0.83) — drag a card between columns", sectGap, boxItem{s.kanban, 190})
-	fGantt, hGantt := sectionFrame("Gantt chart (v0.83) — drag a bar to move it, its edges to resize", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
+	fKanban, hKanban := sectionFrame("Kanban board (v0.84) — drag a card, or right-click to edit", sectGap, boxItem{s.kanban, 190})
+	fGantt, hGantt := sectionFrame("Gantt chart (v0.84) — drag a bar/edges, or right-click to edit", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
 	var totalWide int
 	s.colWide, totalWide = column(
 		[]*toolkit.Frame{fShell, fAgenda, fKanban, fGantt},
@@ -940,6 +949,7 @@ func newState(w, _ int) *state {
 	s.h = wideTop + totalWide + sectPad + toolkit.StatusbarH
 	s.status.SetBounds(toolkit.Rect{X: 0, Y: s.h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
 	s.cmdPalette.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: s.h})
+	s.ctxMenu.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: s.h})
 	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: s.h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
 	// --- click routing table --------------------------------------------
@@ -1045,6 +1055,8 @@ func (s *state) draw(buf []byte) {
 	// CommandPalette floats above everything (even the notification),
 	// matching the "Ctrl+Shift+P" pattern's z-order in a real host.
 	s.cmdPalette.Draw(p, s.theme)
+	// The right-click edit menu is the very topmost overlay.
+	s.ctxMenu.Draw(p, s.theme)
 }
 
 // handleClick dispatches a click at (x, y) to whichever widget it
@@ -1053,6 +1065,13 @@ func (s *state) draw(buf []byte) {
 // comes next; the dashboard clickables come last, in draw order.
 func (s *state) handleClick(x, y int) bool {
 	ev := toolkit.Event{Kind: toolkit.EventClick, X: x, Y: y}
+
+	// Right-click edit menu is the topmost overlay: while open, every click is
+	// its concern (activate a row inside it, or dismiss on an outside click).
+	if s.ctxMenu.Open {
+		s.ctxMenu.OnEvent(ev)
+		return true
+	}
 
 	// CommandPalette overlay first: it floats above even the menu popover
 	// (see draw's z-order), and its own OnEvent already handles an
