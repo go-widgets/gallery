@@ -18,10 +18,13 @@ import (
 // Toolbar (next 24px), a three-column body of widget cards, and a
 // Statusbar on the bottom 20px. Every widget kind gets its own
 // labelled slot rather than being hidden behind a Notebook tab.
-const (
-	surfaceW = 960
-	surfaceH = 1483
-)
+const surfaceW = 960
+
+// surfaceH is COMPUTED from the box-layout content, never hardcoded: newState
+// lays out the three columns + the full-width band and reports the total
+// height they need (see the s.h assignment in newState), so the canvas adapts
+// automatically as widgets are added or removed — nothing is clipped.
+var surfaceH = newState(surfaceW, 0).h
 
 // themeRowH sizes the ViewSwitcher strip sitting between the Toolbar
 // and the column grid. Keep the strip roomy enough that the segment
@@ -155,6 +158,27 @@ type state struct {
 	gridEdit  *toolkit.Table
 	dataView  *toolkit.ListBox
 
+	// Wave 7 (v0.82) — dashboard widgets. Column-fitting ones (Sparklines +
+	// Area/Scatter/Radar charts) go into the three columns; the wide ones
+	// (Agenda month view, Kanban board, Gantt chart) go into a full-width
+	// band below the column grid (colWide).
+	sparkLine    *toolkit.Sparkline
+	sparkBar     *toolkit.Sparkline
+	areaChart    *toolkit.AreaChart
+	scatterChart *toolkit.ScatterChart
+	radarChart   *toolkit.RadarChart
+	agenda       *toolkit.Agenda
+	kanban       *toolkit.Kanban
+	gantt        *toolkit.Gantt
+
+	// App-shell demo: a Border with a COLLAPSIBLE sidebar (a Frame.Collapsible
+	// in the West region) and a draggable splitter GRIP (Border.WestSplit),
+	// its Center hosting a Paned whose handle is a second grip. Demonstrates
+	// the collapsible-sidebar + splitter-grip layout system.
+	appBorder *toolkit.Border
+	sidebar   *toolkit.Frame
+	appPaned  *toolkit.Paned
+
 	// Theme switcher (ViewSwitcher v0.8) sits above the column grid.
 	// Each segment installs a distinct palette so the whole scene
 	// repaints on click — validates that the toolkit's Theme value
@@ -177,6 +201,10 @@ type state struct {
 	// colC is Column C composed with the box-layout system. All three columns
 	// are now box-laid -- the gallery no longer hand-computes any body rects.
 	colC *toolkit.VBox
+	// colWide is a full-width VBox below the 3-column grid hosting the wide
+	// Wave 7 dashboard widgets (Agenda month, Kanban, Gantt) that don't fit a
+	// single narrow column.
+	colWide *toolkit.VBox
 
 	// Live list of interactive widgets for click dispatch. Enumerated
 	// in draw-order (matches the visual order the user sees) so hit-
@@ -254,29 +282,29 @@ func column(frames []*toolkit.Frame, heights []int) (*toolkit.VBox, int) {
 	return vb, total
 }
 
-func newState(w, h int) *state {
-	s := &state{w: w, h: h, theme: toolkit.DefaultLight()}
+// newState builds the whole dashboard. The height is NOT taken from a caller
+// or a magic constant: it is COMPUTED from the box-layout content once the
+// three columns + the full-width band are laid out (see the s.h assignment
+// near the end), so adding widgets grows the surface automatically. The second
+// parameter is ignored (kept only so existing call sites compile); pass 0.
+func newState(w, _ int) *state {
+	s := &state{w: w, theme: toolkit.DefaultLight()}
 
 	// --- top scaffold -----------------------------------------------------
 
-	// Notification hosts a floating toast at bottom-right, just above
-	// the Statusbar. Anchored bottom-right (not top-right) so it never
-	// collides with the ListBox / TreeView headers at the top of
-	// column C when it's visible.
+	// Notification hosts a floating toast at bottom-right, just above the
+	// Statusbar. Positioned at the end of newState, once s.h is known.
 	s.notify = toolkit.NewNotification("")
-	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
-	// CommandPalette is a canvas-wide overlay (like the menu popover):
-	// Bounds spans the whole surface so it can catch an outside click
-	// anywhere + centre its panel, and incoming event coordinates need
-	// no translation since X/Y are already 0.
+	// CommandPalette is a canvas-wide overlay (like the menu popover): its
+	// Bounds span the whole surface (set at the end, once s.h is known) so it
+	// can catch an outside click anywhere + centre its panel.
 	s.cmdPalette = toolkit.NewCommandPalette([]toolkit.PaletteCommand{
 		{Label: "New file", Action: func() { s.showNotify("Palette: New file") }},
 		{Label: "Open recent", Action: func() { s.showNotify("Palette: Open recent") }},
 		{Label: "Toggle theme", Action: func() { s.showNotify("Palette: Toggle theme") }},
 		{Label: "About gallery", Action: func() { s.showNotify("Palette: About gallery") }},
 	})
-	s.cmdPalette.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: h})
 
 	menu := func(label string) toolkit.MenuItem {
 		return toolkit.MenuItem{Label: label, Action: func() { s.showNotify("clicked: " + label) }}
@@ -300,12 +328,11 @@ func newState(w, h int) *state {
 		{Label: "X", OnClick: func() { s.showNotify("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.showNotify("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.81.0") }},
+		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.82.0") }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"~90 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.81.0"})
-	s.status.SetBounds(toolkit.Rect{X: 0, Y: h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
+	s.status = toolkit.NewStatusbar([]string{"~98 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.82.0"})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
 	//
@@ -675,6 +702,69 @@ func newState(w, h int) *state {
 		sub.Draw(p, theme)
 	}
 
+	// --- Wave 7 (v0.82) dashboard widgets — construction only ------------
+	s.sparkLine = toolkit.NewSparkline([]float64{3, 5, 4, 8, 6, 9, 7, 11, 9, 13})
+	s.sparkLine.ShowLast = true
+	s.sparkBar = toolkit.NewSparkline([]float64{5, 8, 4, 9, 6, 11, 7, 10})
+	s.sparkBar.Kind = toolkit.SparkBar
+	s.sparkBar.ShowLast = true
+
+	s.areaChart = toolkit.NewAreaChart([][]float64{{3, 6, 4, 8, 5, 9}, {1, 3, 2, 5, 3, 6}})
+	s.scatterChart = toolkit.NewScatterChart([][]toolkit.ScatterPoint{
+		{{X: 1, Y: 2}, {X: 3, Y: 5}, {X: 4, Y: 3}, {X: 6, Y: 7}, {X: 8, Y: 6}},
+		{{X: 2, Y: 6}, {X: 5, Y: 2}, {X: 7, Y: 8}, {X: 9, Y: 4}},
+	})
+	s.radarChart = toolkit.NewRadarChart(
+		[]string{"Speed", "Power", "Range", "Armor", "Agility", "Luck"},
+		[][]float64{{8, 6, 7, 4, 9, 5}, {5, 9, 4, 8, 3, 7}})
+
+	s.agenda = toolkit.NewAgenda([]toolkit.AgendaEvent{
+		{Title: "Kickoff", Y: 2026, M: 7, D: 3, Fill: toolkit.RGB(0x35, 0x84, 0xe4)},
+		{Title: "Review", Y: 2026, M: 7, D: 10, Fill: toolkit.RGB(0x1e, 0x9e, 0x52)},
+		{Title: "Ship", Y: 2026, M: 7, D: 20, Fill: toolkit.RGB(0xe0, 0x50, 0x50)},
+		{Title: "Retro", Y: 2026, M: 7, D: 24, Fill: toolkit.RGB(0xc0, 0x80, 0xe0)},
+	})
+	s.agenda.View = toolkit.AgendaMonth
+	s.agenda.Year, s.agenda.Month = 2026, 7
+
+	s.kanban = toolkit.NewKanban([]toolkit.KanbanColumn{
+		{Title: "To Do", Cards: []toolkit.KanbanCard{
+			{Title: "Design", Subtitle: "spec", Accent: toolkit.RGB(0xe0, 0x50, 0x50)},
+			{Title: "Research", Subtitle: "links"}}},
+		{Title: "Doing", Cards: []toolkit.KanbanCard{
+			{Title: "Build", Subtitle: "impl", Accent: toolkit.RGB(0x35, 0x84, 0xe4)}}},
+		{Title: "Done", Cards: []toolkit.KanbanCard{
+			{Title: "Ship", Subtitle: "v1", Accent: toolkit.RGB(0x1e, 0x9e, 0x52)}}},
+	})
+	s.kanban.SelectedCol, s.kanban.SelectedCard = 1, 0 // highlight the "Doing" card
+
+	s.gantt = toolkit.NewGantt([]toolkit.GanttTask{
+		{Label: "Design", Start: 0, End: 3, Progress: 1.0},
+		{Label: "Build", Start: 2, End: 8, Progress: 0.6, Fill: toolkit.RGB(0xe5, 0xa5, 0x0a)},
+		{Label: "Test", Start: 7, End: 10, Progress: 0.2, Fill: toolkit.RGB(0x50, 0xa0, 0xe0)},
+		{Label: "Ship", Start: 10, End: 12, Fill: toolkit.RGB(0x1e, 0x9e, 0x52)},
+	})
+	s.gantt.Selected = 1 // highlight the "Build" task
+
+	// App-shell: collapsible sidebar (Frame.Collapsible in a Border West
+	// region) + splitter grips (Border.WestSplit + the Paned handle).
+	nav := toolkit.NewVBox()
+	nav.Spacing = sectGap
+	nav.AddFixed(toolkit.NewLabel("  Dashboard"), 20)
+	nav.AddFixed(toolkit.NewLabel("  Reports"), 20)
+	nav.AddFixed(toolkit.NewLabel("  Settings"), 20)
+	s.sidebar = toolkit.NewFrame(nav)
+	s.sidebar.Title = "Sidebar"
+	s.sidebar.Collapsible = true // click the title bar to collapse the sidebar
+	s.appPaned = toolkit.NewHPaned(
+		toolkit.NewLabel("  Main content — drag the grip →"),
+		toolkit.NewLabel("  Detail"))
+	s.appBorder = toolkit.NewBorder()
+	s.appBorder.West = s.sidebar
+	s.appBorder.WestSize = 150
+	s.appBorder.WestSplit = true // draggable grip between sidebar and centre
+	s.appBorder.Center = s.appPaned
+
 	// --- Column A, re-composed with the box-layout system ----------------
 	//
 	// Every Column-A widget constructed above is re-wrapped here into titled
@@ -712,11 +802,13 @@ func newState(w, h int) *state {
 		boxItem{s.segBar, 22})
 	fWave6, hWave6 := sectionFrame("Wave 6 (v0.81)", sectGap,
 		boxItem{s.propGrid, propGH}, boxItem{s.pagingBar, toolkit.PagingBtnH})
+	fWave7, hWave7 := sectionFrame("Wave 7 (v0.82)", sectGap,
+		boxItem{s.sparkLine, 30}, boxItem{s.sparkBar, 30})
 
 	var totalA int
 	s.colA, totalA = column(
-		[]*toolkit.Frame{fActions, fInputs, fFeedback, fNotebook, fWave1, fWave4, fWave5, fWave6},
-		[]int{hActions, hInputs, hFeedback, hNotebook, hWave1, hWave4, hWave5, hWave6})
+		[]*toolkit.Frame{fActions, fInputs, fFeedback, fNotebook, fWave1, fWave4, fWave5, fWave6, fWave7},
+		[]int{hActions, hInputs, hFeedback, hNotebook, hWave1, hWave4, hWave5, hWave6, hWave7})
 	colATop := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
 	s.colA.SetBounds(toolkit.Rect{X: colAX, Y: colATop, W: colW, H: totalA})
 
@@ -735,11 +827,13 @@ func newState(w, h int) *state {
 	fWave5B, hWave5B := sectionFrame("Wave 5 (v0.42)", sectGap,
 		boxItem{s.carousel, carouselH6}, boxItem{s.mdEditor, mdEditorH6}, boxItem{s.dateRange, 168})
 	fWave6B, hWave6B := sectionFrame("Wave 6 (v0.81)", sectGap, boxItem{s.gridEdit, gridEditH6})
+	fWave7B, hWave7B := sectionFrame("Wave 7 (v0.82)", sectGap,
+		boxItem{s.areaChart, 120}, boxItem{s.scatterChart, 120})
 
 	var totalB int
 	s.colB, totalB = column(
-		[]*toolkit.Frame{fText, fCal, fColor, fWave2, fWave4B, fWave5B, fWave6B},
-		[]int{hText, hCal, hColor, hWave2, hWave4B, hWave5B, hWave6B})
+		[]*toolkit.Frame{fText, fCal, fColor, fWave2, fWave4B, fWave5B, fWave6B, fWave7B},
+		[]int{hText, hCal, hColor, hWave2, hWave4B, hWave5B, hWave6B, hWave7B})
 	s.colB.SetBounds(toolkit.Rect{X: colBX, Y: colATop, W: colW, H: totalB})
 
 	// --- Column C, re-composed with the box-layout system ----------------
@@ -761,12 +855,39 @@ func newState(w, h int) *state {
 	fWave5C, hWave5C := sectionFrame("Wave 5 (v0.42)", sectGap,
 		boxItem{s.wizard, wizardH6}, boxItem{s.treeTable, treeTableH6}, boxItem{s.paletteBtn, 28})
 	fWave6C, hWave6C := sectionFrame("Wave 6 (v0.81)", sectGap, boxItem{s.dataView, dataViewH6})
+	fWave7C, hWave7C := sectionFrame("Wave 7 (v0.82)", sectGap, boxItem{s.radarChart, 200})
 
 	var totalC int
 	s.colC, totalC = column(
-		[]*toolkit.Frame{fList, fTree, fExp, fPaned, fWave3, fWave4C, fWave5C, fWave6C},
-		[]int{hList, hTree, hExp, hPaned, hWave3, hWave4C, hWave5C, hWave6C})
+		[]*toolkit.Frame{fList, fTree, fExp, fPaned, fWave3, fWave4C, fWave5C, fWave6C, fWave7C},
+		[]int{hList, hTree, hExp, hPaned, hWave3, hWave4C, hWave5C, hWave6C, hWave7C})
 	s.colC.SetBounds(toolkit.Rect{X: colCX, Y: colATop, W: colW, H: totalC})
+
+	// --- Full-width band below the columns: wide Wave 7 dashboard widgets -
+	// Agenda (month), Kanban and Gantt need more width than a single narrow
+	// column, so they stack in a full-bleed VBox under the 3-column grid.
+	fShell, hShell := sectionFrame("App shell — collapsible sidebar + splitter grips (v0.63)", sectGap,
+		boxItem{s.appBorder, 130})
+	fAgenda, hAgenda := sectionFrame("Agenda — month view (v0.82)", sectGap, boxItem{s.agenda, 300})
+	fKanban, hKanban := sectionFrame("Kanban board (v0.82)", sectGap, boxItem{s.kanban, 190})
+	fGantt, hGantt := sectionFrame("Gantt chart (v0.82)", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
+	var totalWide int
+	s.colWide, totalWide = column(
+		[]*toolkit.Frame{fShell, fAgenda, fKanban, fGantt},
+		[]int{hShell, hAgenda, hKanban, hGantt})
+	colsBottom := max(totalA, totalB, totalC)
+	wideTop := colATop + colsBottom + sectPad
+	s.colWide.SetBounds(toolkit.Rect{X: margin, Y: wideTop, W: surfaceW - 2*margin, H: totalWide})
+
+	// --- Height is COMPUTED from the box-layout content -------------------
+	// The surface sizes to whatever the columns + full-width band actually
+	// need, plus the bottom Statusbar; nothing is clipped, and adding a widget
+	// grows the canvas automatically (surfaceH is derived from this via a
+	// package var). Position the deferred, height-dependent chrome now.
+	s.h = wideTop + totalWide + sectPad + toolkit.StatusbarH
+	s.status.SetBounds(toolkit.Rect{X: 0, Y: s.h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
+	s.cmdPalette.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: s.h})
+	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: s.h - toolkit.StatusbarH - 32, W: 260, H: 24})
 
 	// --- click routing table --------------------------------------------
 
@@ -802,6 +923,9 @@ func newState(w, h int) *state {
 		s.carousel, s.mdEditor, s.dateRange,
 		// Column C Wave 5 extension
 		s.wizard, s.treeTable, s.paletteBtn,
+		// Full-width band — the app-shell Border routes clicks to its
+		// collapsible sidebar (title toggles collapse) + the Paned grip.
+		s.appBorder,
 	}
 
 	return s
@@ -847,6 +971,9 @@ func (s *state) draw(buf []byte) {
 	// Column C — every section, composed with the box-layout system (see the
 	// colC build in newState). All three columns now render via one Draw each.
 	s.colC.Draw(p, s.theme)
+
+	// Full-width band under the columns: the wide Wave 7 dashboard widgets.
+	s.colWide.Draw(p, s.theme)
 
 	// Bottom scaffold.
 	s.status.Draw(p, s.theme)
