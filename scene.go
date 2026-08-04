@@ -16,6 +16,10 @@ import (
 // so the interactivity callbacks read compactly.
 func itoa(n int) string { return strconv.Itoa(n) }
 
+// dropdownRowH is the pixel height of one row in a DropDown popover (matches
+// the toolkit's PopoverBounds row step), used to map a click to an option.
+const dropdownRowH = 18
+
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
 // the constants drop out and the tests can't reference them.
@@ -187,6 +191,13 @@ type state struct {
 	// route back to it in its own local coordinates even as the pointer leaves.
 	dragTarget toolkit.Widget
 	dragBounds toolkit.Rect
+
+	// keyTarget is the widget that last received a click; keyboard events
+	// (typing into an Entry, an open cell editor, …) route to it.
+	keyTarget toolkit.Widget
+
+	// tooltip shows the underlying value when the pointer hovers a chart.
+	tooltip *toolkit.Tooltip
 
 	// vm is the MVVM layer: the theme/Agenda-view switchers, the Agenda event
 	// list and the palette Button bind to its Observables / ObservableList /
@@ -450,6 +461,7 @@ func newState(w, _ int) *state {
 	s.spin = toolkit.NewSpinButton(0, 100, 42, 1)
 	s.scale = toolkit.NewScale(0, 100, 50)
 	s.dropdown = toolkit.NewDropDown([]string{"UTF-8", "Latin-1", "Shift-JIS"}, 0)
+	s.dropdown.OnSelect = func(i int) { s.showNotify("Encoding: " + s.dropdown.Options[i]) }
 
 	s.progress = toolkit.NewProgressBar()
 	s.progress.Fraction = 0.66
@@ -562,6 +574,7 @@ func newState(w, _ int) *state {
 
 	s.dropdownUp = toolkit.NewDropDown([]string{"Opens upward", "OpenUp = true"}, 0)
 	s.dropdownUp.OpenUp = true
+	s.dropdownUp.OnSelect = func(i int) { s.showNotify("Chose: " + s.dropdownUp.Options[i]) }
 
 	// --- Column C extension: Wave 3 (v0.9) — construction only ----------
 	//
@@ -806,6 +819,10 @@ func newState(w, _ int) *state {
 	// Right-click edit menu (its Menu is rebuilt per popup; bounds set below
 	// once the surface height is known).
 	s.ctxMenu = toolkit.NewContextMenu(toolkit.NewMenu(nil))
+
+	// Hover tooltip for chart values.
+	s.tooltip = toolkit.NewTooltip("")
+	s.tooltip.Placement = toolkit.PlaceAbove
 
 	// App-shell: collapsible sidebar (Frame.Collapsible in a Border West
 	// region) + splitter grips (Border.WestSplit + the Paned handle).
@@ -1052,6 +1069,18 @@ func (s *state) draw(buf []byte) {
 		m.Draw(p, s.theme)
 	}
 	s.notify.Draw(p, s.theme)
+	// Open DropDown popovers render above the widgets (the host owns the
+	// popover surface): a ListBox of the options at PopoverBounds.
+	for _, d := range []*toolkit.DropDown{s.dropdown, s.dropdownUp} {
+		if d.Open {
+			lb := toolkit.NewListBox(d.Options)
+			lb.Selected = d.Selected
+			lb.SetBounds(d.PopoverBounds())
+			lb.Draw(p, s.theme)
+		}
+	}
+	// Chart-hover value tooltip (above the widgets, below the menus).
+	s.tooltip.Draw(p, s.theme)
 	// CommandPalette floats above everything (even the notification),
 	// matching the "Ctrl+Shift+P" pattern's z-order in a real host.
 	s.cmdPalette.Draw(p, s.theme)
@@ -1094,6 +1123,20 @@ func (s *state) handleClick(x, y int) bool {
 		s.menuBar.Active = -1
 	}
 
+	// Open DropDown popover: the host owns the popover surface, so route a click
+	// inside it to Select the option row, or dismiss it on a click outside.
+	for _, d := range []*toolkit.DropDown{s.dropdown, s.dropdownUp} {
+		if d.Open {
+			pb := d.PopoverBounds()
+			if inside(x, y, pb) {
+				d.Select((y - pb.Y) / dropdownRowH)
+			} else {
+				d.Open = false
+			}
+			return true
+		}
+	}
+
 	// Top scaffold.
 	if inside(x, y, s.menuBar.Bounds()) {
 		s.menuBar.OnEvent(local(ev, s.menuBar.Bounds()))
@@ -1111,11 +1154,89 @@ func (s *state) handleClick(x, y int) bool {
 		r := w.Bounds()
 		if inside(x, y, r) {
 			s.dragTarget, s.dragBounds = w, r
+			s.keyTarget = w // clicking a widget focuses it for keyboard input
 			w.OnEvent(local(ev, r))
 			return true
 		}
 	}
-	s.dragTarget = nil
+	s.dragTarget, s.keyTarget = nil, nil
+	return true
+}
+
+// handleMove drives pointer motion: a captured drag first, else a hover check
+// (chart value tooltip). Reports whether the scene changed.
+func (s *state) handleMove(x, y int) bool {
+	if s.handleDrag(x, y) {
+		return true
+	}
+	return s.handleHover(x, y)
+}
+
+// handleHover shows/updates the chart-value tooltip under the pointer, or hides
+// it when the pointer leaves every chart. Reports whether anything changed.
+func (s *state) handleHover(x, y int) bool {
+	txt, ax, ay := s.chartHoverText(x, y)
+	if txt == "" {
+		if s.tooltip.Visible {
+			s.tooltip.Hide()
+			return true
+		}
+		return false
+	}
+	s.tooltip.Text = txt
+	s.tooltip.Show(toolkit.Rect{X: ax, Y: ay})
+	return true
+}
+
+// chartHoverText returns the tooltip text + anchor point for the chart under
+// (x, y): the active Notebook page when it is a Line or Bar chart. Empty text
+// means no chart is under the cursor.
+func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
+	if !inside(x, y, s.notebook.Bounds()) {
+		return "", 0, 0
+	}
+	if s.notebook.Active < 0 || s.notebook.Active >= len(s.notebook.Tabs) {
+		return "", 0, 0
+	}
+	switch c := s.notebook.Tabs[s.notebook.Active].Page.(type) {
+	case *toolkit.LineChart:
+		if r := c.Bounds(); inside(x, y, r) {
+			if i, v, ok := c.ValueAt(x - r.X); ok {
+				return "#" + itoa(i) + " = " + ftoa(v), x, y
+			}
+		}
+	case *toolkit.BarChart:
+		if r := c.Bounds(); inside(x, y, r) {
+			if i, v, ok := c.ValueAt(x - r.X); ok {
+				return "#" + itoa(i) + " = " + ftoa(v), x, y
+			}
+		}
+	}
+	return "", 0, 0
+}
+
+// ftoa formats a chart value compactly (no trailing zeros).
+func ftoa(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
+
+// handleChar routes a printable character to the focused widget as an
+// EventChar (text input into an Entry, an open Table/PropertyGrid cell editor,
+// …). Reports whether a target consumed it.
+func (s *state) handleChar(ch string) bool {
+	if s.keyTarget == nil {
+		return false
+	}
+	s.keyTarget.OnEvent(toolkit.Event{Kind: toolkit.EventChar, Code: ch})
+	return true
+}
+
+// handleKeyDown routes a named key (Enter, Backspace, Arrow*, Home, End, Esc,
+// …) to the focused widget as an EventKeyDown. Reports whether a target
+// consumed it.
+func (s *state) handleKeyDown(code string) bool {
+	if s.keyTarget == nil {
+		return false
+	}
+	s.keyTarget.OnEvent(toolkit.Event{Kind: toolkit.EventKeyDown, Code: code})
 	return true
 }
 
