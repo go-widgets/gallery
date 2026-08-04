@@ -23,7 +23,7 @@ const dropdownRowH = 18
 // toolkitVersion is the go-widgets/toolkit release the gallery is built against,
 // shown in the About menu + statusbar. One place so a dep bump updates both;
 // keep in sync with go.mod.
-const toolkitVersion = "v0.92.0"
+const toolkitVersion = "v0.93.0"
 
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
