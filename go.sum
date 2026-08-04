@@ -30,3 +30,5 @@ github.com/go-widgets/toolkit v0.92.0 h1:tkwyJgjklKw05NqjVHzr6FRSGx+pj3IaqCj4rn7
 github.com/go-widgets/toolkit v0.92.0/go.mod h1:uBYcJJeBA2hqHiTlKaLsPZ9t/NsBA6DFtpp33i5l5/8=
 github.com/go-widgets/toolkit v0.93.0 h1:MN1CCn48NKW71BF6Nw05ZGezyM+JN/t5ehZx/c9ByAs=
 github.com/go-widgets/toolkit v0.93.0/go.mod h1:uBYcJJeBA2hqHiTlKaLsPZ9t/NsBA6DFtpp33i5l5/8=
+github.com/go-widgets/toolkit v0.94.0 h1:hVWxn5lOkiPcO017Ls6FpF18wBHJZBjxCa+pY+te99s=
+github.com/go-widgets/toolkit v0.94.0/go.mod h1:uBYcJJeBA2hqHiTlKaLsPZ9t/NsBA6DFtpp33i5l5/8=

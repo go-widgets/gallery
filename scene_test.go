@@ -764,7 +764,7 @@ func TestDropDownPopover(t *testing.T) {
 
 	pb := s.dropdown.PopoverBounds()
 	s.notify.Visible = false
-	s.handleClick(pb.X+5, pb.Y+dropdownRowH+2) // click option row 1
+	s.handleClick(pb.X+5, pb.Y+toolkit.PopoverRowH+2) // click option row 1
 	if s.dropdown.Selected != 1 {
 		t.Fatalf("Selected=%d, want 1", s.dropdown.Selected)
 	}

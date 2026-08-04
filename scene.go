@@ -16,14 +16,10 @@ import (
 // so the interactivity callbacks read compactly.
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// dropdownRowH is the pixel height of one row in a DropDown popover (matches
-// the toolkit's PopoverBounds row step), used to map a click to an option.
-const dropdownRowH = 18
-
 // toolkitVersion is the go-widgets/toolkit release the gallery is built against,
 // shown in the About menu + statusbar. One place so a dep bump updates both;
 // keep in sync with go.mod.
-const toolkitVersion = "v0.93.0"
+const toolkitVersion = "v0.94.0"
 
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
@@ -1082,14 +1078,10 @@ func (s *state) draw(buf []byte) {
 	}
 	s.notify.Draw(p, s.theme)
 	// Open DropDown popovers render above the widgets (the host owns the
-	// popover surface): a ListBox of the options at PopoverBounds.
+	// z-order, so it draws them last): the toolkit owns the popover surface
+	// itself via DrawPopover, which no-ops when the DropDown is closed.
 	for _, d := range []*toolkit.DropDown{s.dropdown, s.dropdownUp} {
-		if d.Open {
-			lb := toolkit.NewListBox(d.Options)
-			lb.Selected = d.Selected
-			lb.SetBounds(d.PopoverBounds())
-			lb.Draw(p, s.theme)
-		}
+		d.DrawPopover(p, s.theme)
 	}
 	// Chart-hover value tooltip (above the widgets, below the menus).
 	s.tooltip.Draw(p, s.theme)
@@ -1135,16 +1127,12 @@ func (s *state) handleClick(x, y int) bool {
 		s.menuBar.Active = -1
 	}
 
-	// Open DropDown popover: the host owns the popover surface, so route a click
-	// inside it to Select the option row, or dismiss it on a click outside.
+	// Open DropDown popover: the toolkit owns hit-testing via PopoverClick,
+	// which selects the option row inside the popover (firing OnSelect) or
+	// dismisses it on an outside click, and reports whether it consumed the
+	// event (true only while the popover is open).
 	for _, d := range []*toolkit.DropDown{s.dropdown, s.dropdownUp} {
-		if d.Open {
-			pb := d.PopoverBounds()
-			if inside(x, y, pb) {
-				d.Select((y - pb.Y) / dropdownRowH)
-			} else {
-				d.Open = false
-			}
+		if d.PopoverClick(x, y) {
 			return true
 		}
 	}
