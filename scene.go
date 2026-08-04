@@ -898,8 +898,11 @@ func newState(w, _ int) *state {
 	fText, hText := sectionFrame("TextView", sectGap, boxItem{s.textView, 110})
 	fCal, hCal := sectionFrame("Calendar", sectGap, boxItem{s.calendar, 180})
 	fColor, hColor := sectionFrame("ColorChooser", sectGap, boxItem{s.colorChoose, 130})
+	// Size the Diff to its content so Wave 2 adapts (its lines used to clip
+	// against a fixed 54px box).
+	diffH := len(s.diff.Lines)*toolkit.DiffLineH() + 2*toolkit.DiffPadY
 	fWave2, hWave2 := sectionFrame("Wave 2 (v0.8)", sectGap,
-		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, 54})
+		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, diffH})
 	fWave4B, hWave4B := sectionFrame("Wave 4 (v0.33)", sectGap,
 		boxItem{s.notebookSide, 70}, boxItem{s.dropdownUp, 26})
 	fWave5B, hWave5B := sectionFrame("Wave 5 (v0.42)", sectGap,
@@ -1172,9 +1175,11 @@ func (s *state) handleMove(x, y int) bool {
 	return s.handleHover(x, y)
 }
 
-// handleHover shows/updates the chart-value tooltip under the pointer, or hides
-// it when the pointer leaves every chart. Reports whether anything changed.
+// handleHover shows/updates the chart-value tooltip (and the Line/Area hover
+// crosshair) under the pointer, or hides them when the pointer leaves every
+// chart. Reports whether anything changed.
 func (s *state) handleHover(x, y int) bool {
+	s.clearChartHovers() // drop any previous crosshair before re-testing
 	txt, ax, ay := s.chartHoverText(x, y)
 	if txt == "" {
 		if s.tooltip.Visible {
@@ -1188,28 +1193,58 @@ func (s *state) handleHover(x, y int) bool {
 	return true
 }
 
-// chartHoverText returns the tooltip text + anchor point for the chart under
-// (x, y): the active Notebook page when it is a Line or Bar chart. Empty text
-// means no chart is under the cursor.
+// notebookLine returns the active Notebook page when it is a LineChart, else nil.
+func (s *state) notebookLine() *toolkit.LineChart {
+	if s.notebook.Active >= 0 && s.notebook.Active < len(s.notebook.Tabs) {
+		if lc, ok := s.notebook.Tabs[s.notebook.Active].Page.(*toolkit.LineChart); ok {
+			return lc
+		}
+	}
+	return nil
+}
+
+// notebookBar returns the active Notebook page when it is a BarChart, else nil.
+func (s *state) notebookBar() *toolkit.BarChart {
+	if s.notebook.Active >= 0 && s.notebook.Active < len(s.notebook.Tabs) {
+		if bc, ok := s.notebook.Tabs[s.notebook.Active].Page.(*toolkit.BarChart); ok {
+			return bc
+		}
+	}
+	return nil
+}
+
+// clearChartHovers turns off the crosshair on every hoverable curve chart.
+func (s *state) clearChartHovers() {
+	if lc := s.notebookLine(); lc != nil {
+		lc.Hover = false
+	}
+	s.areaChart.Hover = false
+}
+
+// chartHoverText returns the tooltip text + anchor for the chart under (x, y),
+// and — for the Line/Area curve charts — arms their hover crosshair at the
+// matched data point. Empty text means no chart is under the cursor.
 func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
-	if !inside(x, y, s.notebook.Bounds()) {
-		return "", 0, 0
-	}
-	if s.notebook.Active < 0 || s.notebook.Active >= len(s.notebook.Tabs) {
-		return "", 0, 0
-	}
-	switch c := s.notebook.Tabs[s.notebook.Active].Page.(type) {
-	case *toolkit.LineChart:
-		if r := c.Bounds(); inside(x, y, r) {
-			if i, v, ok := c.ValueAt(x - r.X); ok {
+	if lc := s.notebookLine(); lc != nil {
+		if r := lc.Bounds(); inside(x, y, r) {
+			if i, v, ok := lc.ValueAt(x - r.X); ok {
+				lc.Hover, lc.HoverIndex = true, i
 				return "#" + itoa(i) + " = " + ftoa(v), x, y
 			}
 		}
-	case *toolkit.BarChart:
-		if r := c.Bounds(); inside(x, y, r) {
-			if i, v, ok := c.ValueAt(x - r.X); ok {
+	}
+	if bc := s.notebookBar(); bc != nil {
+		if r := bc.Bounds(); inside(x, y, r) {
+			if i, v, ok := bc.ValueAt(x - r.X); ok {
 				return "#" + itoa(i) + " = " + ftoa(v), x, y
 			}
+		}
+	}
+	// Wave-7 AreaChart (value + crosshair).
+	if r := s.areaChart.Bounds(); inside(x, y, r) {
+		if i, v, ok := s.areaChart.ValueAt(x - r.X); ok {
+			s.areaChart.Hover, s.areaChart.HoverIndex = true, i
+			return "#" + itoa(i) + " = " + ftoa(v), x, y
 		}
 	}
 	return "", 0, 0

@@ -888,3 +888,35 @@ func TestDropdownUpSelect(t *testing.T) {
 		t.Fatal("dropdownUp OnSelect did not fire a notification")
 	}
 }
+
+// TestAreaChartHoverCrosshair: hovering the Wave-7 AreaChart shows its value and
+// arms the crosshair; leaving clears it. Also checks the Line crosshair arms.
+func TestAreaChartHoverCrosshair(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.draw(newSurface()) // set chart bounds
+
+	// Line chart hover arms its crosshair.
+	lc := s.notebook.Tabs[0].Page.(*toolkit.LineChart)
+	lr := lc.Bounds()
+	s.handleHover(lr.X+lr.W/2, lr.Y+lr.H/2)
+	if !lc.Hover {
+		t.Fatal("line-chart hover did not arm the crosshair")
+	}
+
+	// Area chart hover: value tooltip + crosshair.
+	ar := s.areaChart.Bounds()
+	if !s.handleHover(ar.X+ar.W/2, ar.Y+ar.H/2) || !s.tooltip.Visible {
+		t.Fatal("area-chart hover did not show a tooltip")
+	}
+	if !s.areaChart.Hover {
+		t.Fatal("area-chart hover did not arm the crosshair")
+	}
+	if lc.Hover {
+		t.Fatal("moving to the area chart should clear the line crosshair")
+	}
+	// Leaving every chart clears the area crosshair.
+	s.handleHover(1, 1)
+	if s.areaChart.Hover {
+		t.Fatal("leaving the chart should clear the area crosshair")
+	}
+}
