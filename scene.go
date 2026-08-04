@@ -20,6 +20,11 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // the toolkit's PopoverBounds row step), used to map a click to an option.
 const dropdownRowH = 18
 
+// toolkitVersion is the go-widgets/toolkit release the gallery is built against,
+// shown in the About menu + statusbar. One place so a dep bump updates both;
+// keep in sync with go.mod.
+const toolkitVersion = "v0.91.0"
+
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
 // the constants drop out and the tests can't reference them.
@@ -374,11 +379,11 @@ func newState(w, _ int) *state {
 		{Label: "X", OnClick: func() { s.showNotify("Toolbar: Cut") }},
 		{Label: "V", OnClick: func() { s.showNotify("Toolbar: Paste") }},
 		{Separator: true},
-		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ v0.82.0") }},
+		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ " + toolkitVersion) }},
 	})
 	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
 
-	s.status = toolkit.NewStatusbar([]string{"~98 widgets", "100 % cov", "click something", "go-widgets/toolkit v0.82.0"})
+	s.status = toolkit.NewStatusbar([]string{"~98 widgets", "100 % cov", "click something", "go-widgets/toolkit " + toolkitVersion})
 
 	// --- Theme switcher (ViewSwitcher v0.8) -----------------------------
 	//
