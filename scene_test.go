@@ -744,6 +744,65 @@ func TestAgendaAddEvent(t *testing.T) {
 	}
 }
 
+// TestAgendaEventEditing drives the inline event editor end-to-end through the
+// host: opening it (OnSelect), routing keystrokes to it (handleChar/
+// handleKeyDown), and committing on an outside click (handleClick), which fires
+// OnEventEdited → a notification.
+func TestAgendaEventEditing(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	// A chip click fires OnSelect, which opens the toolkit editor on that event.
+	s.agenda.OnSelect(0)
+	if s.agenda.Editing() != 0 {
+		t.Fatalf("Editing()=%d, want 0 (editor open)", s.agenda.Editing())
+	}
+	// Keystrokes are captured by the open editor, not the previous keyTarget.
+	if !s.handleChar("!") {
+		t.Fatal("handleChar should be consumed by the open editor")
+	}
+	if !s.handleKeyDown("Backspace") {
+		t.Fatal("handleKeyDown should be consumed by the open editor")
+	}
+	// A click anywhere while editing routes to the editor; (1,1) is outside the
+	// centred panel, so it commits + closes and notifies via OnEventEdited.
+	s.notify.Visible = false
+	if !s.handleClick(1, 1) {
+		t.Fatal("click while editing should be consumed")
+	}
+	if s.agenda.Editing() != -1 {
+		t.Fatal("outside click should close the editor")
+	}
+	if !s.notify.Visible {
+		t.Fatal("committing an edit should fire OnEventEdited → a notification")
+	}
+}
+
+// TestAgendaSidebarToggle clicks a calendar row in the sidebar rail and checks
+// the calendar's visibility flips (shared with the Agenda) + OnToggle notifies,
+// for both the hide and the show direction.
+func TestAgendaSidebarToggle(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	sb := s.calSidebar.Bounds()
+	rowX := sb.X + 10
+	rowY := sb.Y + toolkit.AgendaHeaderH + toolkit.AgendaSidebarRowH/2 // row 0
+
+	s.notify.Visible = false
+	s.handleClick(rowX, rowY) // hide "Team"
+	if !s.agendaCals[0].Hidden {
+		t.Fatal("first sidebar click should hide calendar 0")
+	}
+	if !s.notify.Visible {
+		t.Fatal("OnToggle should notify on hide")
+	}
+	s.notify.Visible = false
+	s.handleClick(rowX, rowY) // show it again
+	if s.agendaCals[0].Hidden {
+		t.Fatal("second sidebar click should show calendar 0")
+	}
+	if !s.notify.Visible {
+		t.Fatal("OnToggle should notify on show")
+	}
+}
+
 // TestItoa spot-checks the local itoa helper.
 func TestItoa(t *testing.T) {
 	if itoa(0) != "0" || itoa(42) != "42" || itoa(-7) != "-7" {
