@@ -19,7 +19,7 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // toolkitVersion is the go-widgets/toolkit release the gallery is built against,
 // shown in the About menu + statusbar. One place so a dep bump updates both;
 // keep in sync with go.mod.
-const toolkitVersion = "v0.94.0"
+const toolkitVersion = "v0.97.0"
 
 // Canvas dimensions. Lives in scene.go (not main.go) so the native
 // scene_test compiles without the js && wasm build tag — otherwise
@@ -179,6 +179,8 @@ type state struct {
 	scatterChart   *toolkit.ScatterChart
 	radarChart     *toolkit.RadarChart
 	agenda         *toolkit.Agenda
+	calSidebar     *toolkit.AgendaSidebar
+	agendaCals     []toolkit.AgendaCalendar
 	agendaSwitcher *toolkit.ViewSwitcher
 	kanban         *toolkit.Kanban
 	gantt          *toolkit.Gantt
@@ -765,20 +767,47 @@ func newState(w, _ int) *state {
 		[]string{"Speed", "Power", "Range", "Armor", "Agility", "Luck"},
 		[][]float64{{8, 6, 7, 4, 9, 5}, {5, 9, 4, 8, 3, 7}})
 
+	// Four colour-coded calendars — the model a host fills from several remote
+	// (CalDAV/ICS) sources. Each event belongs to one via its Calendar index,
+	// so its colour comes from the calendar (no per-event Fill needed), and the
+	// sidebar can hide a whole calendar at once.
+	s.agendaCals = []toolkit.AgendaCalendar{
+		{Name: "Team", Color: toolkit.RGB(0x35, 0x84, 0xe4)},
+		{Name: "Eng", Color: toolkit.RGB(0x1e, 0x9e, 0x52)},
+		{Name: "Ops", Color: toolkit.RGB(0xe0, 0x50, 0x50)},
+		{Name: "Personal", Color: toolkit.RGB(0xc0, 0x80, 0xe0)},
+	}
 	s.agenda = toolkit.NewAgenda([]toolkit.AgendaEvent{
-		{Title: "Kickoff", Y: 2026, M: 7, D: 3, Fill: toolkit.RGB(0x35, 0x84, 0xe4)},
-		{Title: "Review", Y: 2026, M: 7, D: 10, Fill: toolkit.RGB(0x1e, 0x9e, 0x52)},
-		{Title: "Ship", Y: 2026, M: 7, D: 20, Fill: toolkit.RGB(0xe0, 0x50, 0x50)},
-		{Title: "Retro", Y: 2026, M: 7, D: 24, Fill: toolkit.RGB(0xc0, 0x80, 0xe0)},
+		{Title: "Kickoff", Y: 2026, M: 7, D: 3, Calendar: 0},
+		{Title: "Review", Y: 2026, M: 7, D: 10, Calendar: 1},
+		{Title: "Ship", Y: 2026, M: 7, D: 20, Calendar: 2},
+		{Title: "Retro", Y: 2026, M: 7, D: 24, Calendar: 3},
 	})
+	s.agenda.Calendars = s.agendaCals
 	s.agenda.View = toolkit.AgendaMonth
 	s.agenda.Year, s.agenda.Month = 2026, 7
+	// Left click on an event opens the toolkit's inline editor (title + calendar
+	// picker); OnEventEdited fires when it commits.
+	s.agenda.OnSelect = func(i int) { s.agenda.EditEvent(i) }
+	s.agenda.OnEventEdited = func(i int) {
+		s.showNotify("Edited: " + s.agenda.Events[i].Title)
+	}
 	// Clicking an empty in-month day adds an event there, through the MVVM
 	// event ObservableList (which mirrors back into the widget).
 	s.agenda.OnDayActivate = func(y, m, d int) {
 		s.addedEvents++
 		s.vm.addEvent("New "+itoa(s.addedEvents), y, m, d, toolkit.RGB(0x7a, 0x5a, 0xf0))
 		s.showNotify("Added event on " + itoa(m) + "/" + itoa(d))
+	}
+	// The calendar rail beside the Agenda: one row per calendar, click to
+	// hide/show it (the shared slice means the Agenda re-renders to match).
+	s.calSidebar = toolkit.NewAgendaSidebar(s.agendaCals)
+	s.calSidebar.OnToggle = func(i int) {
+		state := "shown"
+		if s.agendaCals[i].Hidden {
+			state = "hidden"
+		}
+		s.showNotify(s.agendaCals[i].Name + " " + state)
 	}
 	// A four-segment switcher drives the Agenda's view (Week/Month/Quarter/Year),
 	// whose enum matches these indices 0..3. Its OnChange is installed by the
@@ -950,8 +979,9 @@ func newState(w, _ int) *state {
 	// column, so they stack in a full-bleed VBox under the 3-column grid.
 	fShell, hShell := sectionFrame("App shell — collapsible sidebar + splitter grips (v0.63)", sectGap,
 		boxItem{s.appBorder, 130})
-	fAgenda, hAgenda := sectionFrame("Agenda (v0.84) — switch views above; click or right-click an empty day to add", sectGap,
-		boxItem{s.agendaSwitcher, 28}, boxItem{s.agenda, 272})
+	fAgenda, hAgenda := sectionFrame("Agenda (v0.97) — calendar rail (click to hide/show); click an event to edit; click an empty day to add", sectGap,
+		boxItem{s.agendaSwitcher, 28},
+		boxItem{hrowFixedFlex(sectGap, 150, s.calSidebar, s.agenda), 272})
 	fKanban, hKanban := sectionFrame("Kanban board (v0.84) — drag a card, or right-click to edit", sectGap, boxItem{s.kanban, 190})
 	fGantt, hGantt := sectionFrame("Gantt chart (v0.84) — drag a bar/edges, or right-click to edit", sectGap, boxItem{s.gantt, toolkit.GanttHeaderH + 4*toolkit.GanttRowH})
 	var totalWide int
@@ -1016,7 +1046,7 @@ func newState(w, _ int) *state {
 		s.appBorder,
 		// Interactive Wave 7 widgets (v0.83): the Agenda view switcher + the
 		// Agenda (day-activate), and the drag-editable Kanban and Gantt.
-		s.agendaSwitcher, s.agenda, s.kanban, s.gantt,
+		s.agendaSwitcher, s.calSidebar, s.agenda, s.kanban, s.gantt,
 	}
 
 	return s
@@ -1083,6 +1113,9 @@ func (s *state) draw(buf []byte) {
 	for _, d := range []*toolkit.DropDown{s.dropdown, s.dropdownUp} {
 		d.DrawPopover(p, s.theme)
 	}
+	// The Agenda's inline event editor is a host-owned overlay too (drawn last
+	// for z-order); DrawEditor no-ops unless an editor is open.
+	s.agenda.DrawEditor(p, s.theme)
 	// Chart-hover value tooltip (above the widgets, below the menus).
 	s.tooltip.Draw(p, s.theme)
 	// CommandPalette floats above everything (even the notification),
@@ -1135,6 +1168,14 @@ func (s *state) handleClick(x, y int) bool {
 		if d.PopoverClick(x, y) {
 			return true
 		}
+	}
+
+	// Open Agenda event editor: while it is open every click is its concern —
+	// the toolkit routes it to a swatch (reassign), the title Entry (focus), or
+	// an outside-click (commit + close).
+	if s.agenda.Editing() >= 0 {
+		s.agenda.EditorClick(x, y)
+		return true
 	}
 
 	// Top scaffold.
@@ -1287,6 +1328,11 @@ func ftoa(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
 // EventChar (text input into an Entry, an open Table/PropertyGrid cell editor,
 // …). Reports whether a target consumed it.
 func (s *state) handleChar(ch string) bool {
+	// An open Agenda event editor captures text input for its title Entry.
+	if s.agenda.Editing() >= 0 {
+		s.agenda.EditorChar(ch)
+		return true
+	}
 	if s.keyTarget == nil {
 		return false
 	}
@@ -1298,6 +1344,12 @@ func (s *state) handleChar(ch string) bool {
 // …) to the focused widget as an EventKeyDown. Reports whether a target
 // consumed it.
 func (s *state) handleKeyDown(code string) bool {
+	// An open Agenda event editor captures keys: Enter commits, Escape cancels,
+	// the rest edit the title.
+	if s.agenda.Editing() >= 0 {
+		s.agenda.EditorKey(code)
+		return true
+	}
 	if s.keyTarget == nil {
 		return false
 	}
