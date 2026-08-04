@@ -355,3 +355,77 @@ func TestContextMenuOtherInstances(t *testing.T) {
 		t.Fatalf("gridEdit delete: %d, want %d", len(s.gridEdit.Rows), gn-1)
 	}
 }
+
+func TestContextMenuTreeTable(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	ttr := s.treeTable.Bounds()
+	if !s.handleContext(ttr.X+40, ttr.Y+toolkit.TreeTableHeaderHeight+2) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a TreeTable node did not open a menu")
+	}
+
+	group := s.treeTable.Root[0] // "Column A", has children
+	gm := s.treeTableMenu(group)
+	if !menuHasLabel(gm, "Toggle expand") || !menuHasLabel(gm, "Delete node") {
+		t.Fatal("group menu missing Toggle expand / Delete node")
+	}
+	before := len(group.Children)
+	gm.Items[0].Action() // Add child
+	if len(group.Children) != before+1 {
+		t.Fatalf("Add child: %d, want %d", len(group.Children), before+1)
+	}
+	exp := group.Expanded
+	gm.Items[1].Action() // Toggle expand
+	if group.Expanded == exp {
+		t.Fatal("Toggle expand did not flip Expanded")
+	}
+
+	// A leaf node: no Toggle expand, but Delete present.
+	leaf := group.Children[0]
+	lm := s.treeTableMenu(leaf)
+	if menuHasLabel(lm, "Toggle expand") {
+		t.Fatal("leaf menu must not offer Toggle expand")
+	}
+	s.treeTable.Selected = leaf
+	lm.Items[len(lm.Items)-1].Action() // Delete node
+	if s.treeTable.Selected != nil {
+		t.Fatal("deleting the selected node did not clear Selected")
+	}
+	for _, c := range group.Children {
+		if c == leaf {
+			t.Fatal("Delete node did not detach the leaf")
+		}
+	}
+
+	// A node with no Cells exercises the empty-cells branch of Add child.
+	empty := &toolkit.TreeTableNode{}
+	s.treeTableMenu(empty).Items[0].Action()
+	if len(empty.Children) != 1 {
+		t.Fatal("Add child on an empty-cell node failed")
+	}
+}
+
+func TestContextMenuPropGrid(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	pr := s.propGrid.Bounds()
+	if !s.handleContext(pr.X+30, pr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open {
+		t.Fatal("right-click on a PropertyGrid row did not open a menu")
+	}
+	n := len(s.propGrid.Table().Rows)
+	if n == 0 {
+		t.Fatal("propGrid has no rows to test")
+	}
+	s.propGridMenu(0).Items[0].Action() // Duplicate
+	if len(s.propGrid.Table().Rows) != n+1 {
+		t.Fatalf("Duplicate: %d rows, want %d", len(s.propGrid.Table().Rows), n+1)
+	}
+	s.propGridMenu(0).Items[2].Action() // Delete property
+	if len(s.propGrid.Table().Rows) != n {
+		t.Fatalf("Delete: %d rows, want %d", len(s.propGrid.Table().Rows), n)
+	}
+	// Out-of-range: name resolves to "" and both actions are guarded no-ops.
+	s.propGridMenu(999).Items[0].Action()
+	s.propGridMenu(999).Items[2].Action()
+	if len(s.propGrid.Table().Rows) != n {
+		t.Fatal("out-of-range propGrid actions mutated the grid")
+	}
+}

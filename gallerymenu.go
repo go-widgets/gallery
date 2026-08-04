@@ -1,13 +1,14 @@
 // gallerymenu.go — the right-click edit menu. Kept tagless (like scene.go) so
 // a native go test exercises it without the js && wasm build tag.
 //
-// handleContext hit-tests the editable widgets — Kanban / Gantt / Agenda plus
-// the data widgets ListBox / Table / TreeView — via their exported hit helpers
-// (CardAt / TaskAt / DayAt / IndexAt / RowAt / NodeAt), builds an edit Menu for
-// the item under the cursor, and pops the shared ContextMenu at the click
-// point. The menu actions mutate the widgets through their public API
-// (Kanban.MoveCard, TreeView.Remove, the exported Tasks/Columns/Rows/Items
-// slices, the MVVM event list).
+// handleContext hit-tests every editable widget — Kanban / Gantt / Agenda and
+// the data widgets ListBox / Table / TreeView / TreeTable / PropertyGrid — via
+// their exported hit helpers (CardAt / TaskAt / DayAt / IndexAt / RowAt /
+// NodeAt), builds an edit Menu for the item under the cursor, and pops the
+// shared ContextMenu at the click point. The menu actions mutate the widgets
+// through their public API (Kanban.MoveCard, TreeView/TreeTable.Remove,
+// PropertyGrid.RemoveAt, the exported Tasks/Columns/Rows/Items slices, the MVVM
+// event list).
 
 package main
 
@@ -68,6 +69,20 @@ func (s *state) handleContext(x, y int) bool {
 				s.ctxMenu.Popup(x, y)
 				return true
 			}
+		}
+	}
+	if r := s.treeTable.Bounds(); inside(x, y, r) {
+		if node := s.treeTable.NodeAt(x-r.X, y-r.Y); node != nil {
+			s.ctxMenu.Menu = s.treeTableMenu(node)
+			s.ctxMenu.Popup(x, y)
+			return true
+		}
+	}
+	if r := s.propGrid.Bounds(); inside(x, y, r) {
+		if row := s.propGrid.Table().RowAt(x-r.X, y-r.Y); row >= 0 {
+			s.ctxMenu.Menu = s.propGridMenu(row)
+			s.ctxMenu.Popup(x, y)
+			return true
 		}
 	}
 	// Nothing editable under the cursor: dismiss any open menu.
@@ -272,4 +287,62 @@ func (s *state) treeMenu(tv *toolkit.TreeView, node *toolkit.TreeNode) *toolkit.
 		}})
 	}
 	return toolkit.NewMenu(items)
+}
+
+// treeTableMenu builds the edit menu for TreeTable node: add a child, toggle its
+// expansion (only when it has children), or delete it (via TreeTable.Remove).
+func (s *state) treeTableMenu(node *toolkit.TreeTableNode) *toolkit.Menu {
+	items := []toolkit.MenuItem{
+		{Label: "Add child", Action: func() {
+			cells := make([]string, len(node.Cells))
+			if len(cells) > 0 {
+				cells[0] = "child " + itoa(len(node.Children)+1)
+			}
+			for i := 1; i < len(cells); i++ {
+				cells[i] = "leaf"
+			}
+			node.Children = append(node.Children, &toolkit.TreeTableNode{Cells: cells})
+			node.Expanded = true
+			s.showNotify("Row added")
+		}},
+	}
+	if len(node.Children) > 0 {
+		items = append(items, toolkit.MenuItem{Label: "Toggle expand", Action: func() {
+			node.Expanded = !node.Expanded
+			s.showNotify("Toggled row")
+		}})
+	}
+	items = append(items, toolkit.MenuItem{Separator: true})
+	items = append(items, toolkit.MenuItem{Label: "Delete node", Action: func() {
+		if s.treeTable.Remove(node) {
+			if s.treeTable.Selected == node {
+				s.treeTable.Selected = nil
+			}
+			s.showNotify("Row deleted")
+		}
+	}})
+	return toolkit.NewMenu(items)
+}
+
+// propGridMenu builds the edit menu for PropertyGrid row: duplicate the property
+// or delete it (via PropertyGrid.RemoveAt).
+func (s *state) propGridMenu(row int) *toolkit.Menu {
+	rows := s.propGrid.Table().Rows
+	name := ""
+	if row >= 0 && row < len(rows) {
+		name = rows[row][0]
+	}
+	return toolkit.NewMenu([]toolkit.MenuItem{
+		{Label: "Duplicate", Action: func() {
+			if r := s.propGrid.Table().Rows; row >= 0 && row < len(r) {
+				s.propGrid.Add(r[row][0]+" copy", r[row][1])
+				s.showNotify("Property duplicated")
+			}
+		}},
+		{Separator: true},
+		{Label: "Delete property", Action: func() {
+			s.propGrid.RemoveAt(row)
+			s.showNotify("Deleted " + name)
+		}},
+	})
 }
