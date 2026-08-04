@@ -25,8 +25,10 @@ Pages, S3, ...).
 
 ## Layout
 
-`scene.go` composes widgets from the toolkit onto a **960×720**
-surface as a three-column card grid — every widget kind lives in
+`scene.go` composes widgets from the toolkit onto a **960-wide**
+surface whose height is **computed from the box-layout content** (no
+hard-coded height — the canvas grows as widgets are added) as a
+three-column card grid plus a full-width band, every widget kind in
 its own labelled slot rather than being hidden behind a tab. Around
 it:
 
@@ -38,14 +40,39 @@ it:
 - **Notification** — top-right toast, auto-dismisses via a 60 Hz
   `setInterval` that calls `state.tick()`.
 
-The scene currently exposes the pre-v0.7 widget catalogue (27
-constructors — MenuBar/Toolbar/Notebook/DropDown/TreeView/… — that
-already covered the core toolkit surface). The 29 widgets shipped
-across v0.7 / v0.8 / v0.9 (Switch, Alert, Card, Steps, Table,
-Toast, Banner, ActionRow, ViewSwitcher, ChatBubble, Diff, Stat,
-Timeline, DropZone, Chip, FormField, ProgressCircle, …) are
-compiled into the wasm bundle but not yet composed into a slot —
-adding them is a slot-geometry follow-up.
+The scene composes the full toolkit catalogue (~98 widgets across
+the v0.7–v0.85 waves) into labelled slots — leaf widgets, the
+container/layout system (VBox/HBox/Grid/Frame/Border/Paned), and the
+Wave-7 dashboard widgets (Kanban, Gantt, Agenda, Sparkline, Area/
+Scatter/Radar charts).
+
+## Interactions
+
+The gallery is a demonstrator you **drive**, not just look at:
+
+- **Drag** — Kanban cards move between columns; Gantt bars move, and
+  their edges resize (`mousedown`→`mousemove`→`mouseup` routed through
+  a scene drag-capture into the widgets' `EventClick`/`EventMouseDrag`/
+  `EventMouseUp`).
+- **Right-click edit menu** — a `ContextMenu` on every editable widget
+  (Kanban card, Gantt task, Agenda day, ListBox item, Table row,
+  TreeView / TreeTable node, PropertyGrid row): move / duplicate /
+  delete / add-child / … The scene hit-tests via the toolkit's exported
+  `CardAt`/`TaskAt`/`DayAt`/`IndexAt`/`RowAt`/`NodeAt` helpers.
+- **Agenda** — a Week/Month/Quarter/Year switcher; click (or right-
+  click) an empty day to add an event.
+- **Theme switcher** — recolours the whole scene (Light/Dark/Adwaita/
+  WhiteSur) by swapping one `Theme` value.
+- **Full window** — the ⛶ button (or double-click) expands the canvas
+  to fill the browser window in a scrollable overlay; **Esc** exits.
+  It is deliberately *not* the OS Fullscreen API — it stays inside the
+  browser window.
+
+Interactive state flows through
+[`go-widgets/mvvm`](https://github.com/go-widgets/mvvm): the theme and
+Agenda-view switchers are two-way-bound `Observable`s, the Agenda
+events an `ObservableList` mirrored into the widget, and the command
+palette a `Command` (see `viewmodel.go`).
 
 The SVG-per-widget variant of the same catalogue (43 widgets, one
 `.svg` + `.png` each) is available at <https://go-widgets.github.io/svg/>
