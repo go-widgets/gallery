@@ -11,9 +11,13 @@
   h1 { font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 6px; }
   .tagline { color: #9aa0b4; margin: 0 0 22px; }
   #screen { display: block; margin: 0 auto; background: #ffffff; border: 1px solid #262c40; border-radius: 12px; max-width: 100%; height: auto; cursor: pointer; box-shadow: 0 12px 40px rgba(20,184,166,.15); }
-  /* Fullscreen: fit the whole canvas inside the screen, centred. The mouse
-     mapping in main.go scales via getBoundingClientRect, so clicks keep working. */
-  #screen:fullscreen { max-width: 100vw; max-height: 100vh; width: auto; height: auto; border-radius: 0; background: #ffffff; object-fit: contain; }
+  /* "Full window" (NOT the OS Fullscreen API): a fixed overlay that fills the
+     browser window's viewport and scrolls through the tall dashboard. The
+     canvas keeps its aspect (width:100%, height:auto), so the mouse mapping in
+     main.go — which scales uniformly via getBoundingClientRect — stays exact. */
+  #fswrap { position: fixed; inset: 0; z-index: 9999; overflow: auto; background: #0b0d12; display: none; }
+  #fswrap.open { display: block; }
+  #screen.maxi { max-width: none; width: 100vw; height: auto; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
   #fsbtn { display: block; margin: 14px auto 0; padding: 8px 16px; background: #14b8a6; color: #04201c; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
   #fsbtn:hover { background: #12a394; }
   .hint { color: #9aa0b4; font-size: .9rem; margin: 14px 0 24px; }
@@ -27,24 +31,43 @@
     <h1>go-widgets gallery</h1>
     <p class="tagline">Live wasm demo of <a href="https://github.com/go-widgets/toolkit">go-widgets/toolkit</a>.</p>
     <canvas id="screen" width="960" height="720"></canvas>
-    <button id="fsbtn" type="button">⛶ Fullscreen</button>
-    <p class="hint">Dashboard — every widget kind (Button, Toggle, CheckButton, RadioButton, Entry, SpinButton, Scale, DropDown, ProgressBar, LevelBar, Spinner, TextView, Calendar, ColorChooser, ListBox, TreeView, Notebook, Paned, Expander + Frame, Menu, Toolbar, Statusbar, Notification) side by side, mirroring GTK4's widget-factory layout at a glance. Click a menu name to open its popover; click any widget for a toast. Press <strong>⛶ Fullscreen</strong> (or double-click the canvas) to view it full-screen.</p>
+    <button id="fsbtn" type="button">⛶ Full window</button>
+    <p class="hint">A live, <strong>interactive</strong> dashboard exercising the whole go-widgets/toolkit — every widget family in its own labelled slot. It's a demonstrator you drive: <strong>drag</strong> Kanban cards between columns and Gantt bars to reschedule; <strong>right-click</strong> any Kanban card, Gantt task, Agenda day, list item, table row or tree node to edit it (move, duplicate, delete, add…); switch the Agenda between Week / Month / Quarter / Year and click an empty day to add an event; recolour the whole scene from the theme switcher. Interactive state flows through <a href="https://github.com/go-widgets/mvvm">go-widgets/mvvm</a> (Observable / Command / ObservableList). Click a menu name for its popover; press <strong>⛶ Full window</strong> (or double-click the canvas) to expand it to fill the browser window — <kbd>Esc</kbd> exits.</p>
     <div id="err"></div>
     <p><a href="https://github.com/go-widgets">go-widgets</a> · <a href="https://github.com/go-widgets/gallery">source</a></p>
   </div>
   <footer>BSD-3-Clause · pure Go · CGO=0</footer>
+  <div id="fswrap"></div>
   <script>
-    // Fullscreen toggle: request/exit fullscreen on the canvas. Double-clicking
-    // the canvas toggles too. The Go mouse handler scales via the canvas
-    // bounding rect, so clicks land correctly at any displayed size.
+    // "Full window" toggle — a fixed overlay filling the browser window's
+    // viewport, NOT the OS Fullscreen API (which took over the whole monitor).
+    // Enter: move the canvas into a fixed, scrollable overlay so it fills the
+    // window and scrolls through the tall surface. Exit: put it back. The
+    // canvas element (and its 2D context) survive the DOM move, so rendering
+    // and click-mapping continue unbroken. Esc or the button/double-click exit.
     (() => {
       const screen = document.getElementById("screen");
-      const toggle = () => {
-        if (document.fullscreenElement) { document.exitFullscreen(); }
-        else if (screen.requestFullscreen) { screen.requestFullscreen(); }
+      const wrap = document.getElementById("fswrap");
+      const btn = document.getElementById("fsbtn");
+      const home = screen.parentNode; // .wrap — restore target
+      const on = () => screen.classList.contains("maxi");
+      const enter = () => {
+        wrap.appendChild(screen);
+        screen.classList.add("maxi"); wrap.classList.add("open");
+        document.body.classList.add("maxi-open");
+        btn.textContent = "⤢ Exit full window";
       };
-      document.getElementById("fsbtn").addEventListener("click", toggle);
+      const exit = () => {
+        home.insertBefore(screen, btn); // back to its slot, before the button
+        screen.classList.remove("maxi"); wrap.classList.remove("open");
+        document.body.classList.remove("maxi-open");
+        btn.textContent = "⛶ Full window";
+      };
+      const toggle = () => on() ? exit() : enter();
+      btn.textContent = "⛶ Full window";
+      btn.addEventListener("click", toggle);
       screen.addEventListener("dblclick", toggle);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && on()) exit(); });
     })();
   </script>
   <script>
