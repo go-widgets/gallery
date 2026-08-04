@@ -80,7 +80,7 @@ func main() {
 		}
 		return nil
 	}))
-	listen("mousemove", state.handleDrag)
+	listen("mousemove", state.handleMove) // captured drag, else chart-hover tooltip
 	listen("mouseup", state.handleRelease)
 	// Right-click opens the edit context menu; suppress the browser's own menu.
 	canvas.Call("addEventListener", "contextmenu", js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -90,6 +90,29 @@ func main() {
 		args[0].Call("preventDefault")
 		x, y := coords(args[0])
 		if state.handleContext(x, y) {
+			render()
+		}
+		return nil
+	}))
+	// Keyboard: routed to the focused widget (last clicked) so an Entry or an
+	// open grid-cell editor accepts text. Listen on the window (a <canvas> is
+	// not focusable by default). A single printable rune with no Ctrl/Meta/Alt
+	// is text (EventChar); every named key (Enter, Backspace, Arrow*, …) is an
+	// EventKeyDown.
+	js.Global().Call("addEventListener", "keydown", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) == 0 {
+			return nil
+		}
+		ev := args[0]
+		key := ev.Get("key").String()
+		var changed bool
+		if len([]rune(key)) == 1 && !ev.Get("ctrlKey").Bool() && !ev.Get("metaKey").Bool() && !ev.Get("altKey").Bool() {
+			changed = state.handleChar(key)
+		} else {
+			changed = state.handleKeyDown(key)
+		}
+		if changed {
+			ev.Call("preventDefault")
 			render()
 		}
 		return nil

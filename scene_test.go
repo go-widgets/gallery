@@ -750,3 +750,141 @@ func TestItoa(t *testing.T) {
 		t.Fatalf("itoa: %q %q %q", itoa(0), itoa(42), itoa(-7))
 	}
 }
+
+// TestDropDownPopover: opening the combobox, selecting an option via its
+// popover (fires OnSelect), and dismissing it with an outside click.
+func TestDropDownPopover(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	dr := s.dropdown.Bounds()
+	s.handleClick(dr.X+dr.W/2, dr.Y+dr.H/2) // open via the control
+	if !s.dropdown.Open {
+		t.Fatal("dropdown did not open")
+	}
+	s.draw(newSurface()) // renders the popover (covers the draw branch)
+
+	pb := s.dropdown.PopoverBounds()
+	s.notify.Visible = false
+	s.handleClick(pb.X+5, pb.Y+dropdownRowH+2) // click option row 1
+	if s.dropdown.Selected != 1 {
+		t.Fatalf("Selected=%d, want 1", s.dropdown.Selected)
+	}
+	if s.dropdown.Open {
+		t.Fatal("popover should close after a selection")
+	}
+	if !s.notify.Visible {
+		t.Fatal("OnSelect did not fire a notification")
+	}
+	// Reopen, then an outside click dismisses it.
+	s.handleClick(dr.X+dr.W/2, dr.Y+dr.H/2)
+	if !s.dropdown.Open {
+		t.Fatal("dropdown did not reopen")
+	}
+	s.handleClick(1, surfaceH-toolkit.StatusbarH-2) // dead space
+	if s.dropdown.Open {
+		t.Fatal("outside click should dismiss the popover")
+	}
+}
+
+// TestKeyboardRouting: typing routes to the focused (last-clicked) widget; a
+// dead-space click clears focus so keys become no-ops.
+func TestKeyboardRouting(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	er := s.entry.Bounds()
+	s.handleClick(er.X+10, er.Y+er.H/2)
+	if s.keyTarget != toolkit.Widget(s.entry) {
+		t.Fatal("clicking the entry did not focus it for keyboard")
+	}
+	before := s.entry.Text
+	s.handleChar("Z")
+	if s.entry.Text == before {
+		t.Fatal("handleChar did not edit the entry")
+	}
+	s.handleKeyDown("Backspace")
+	if s.entry.Text != before {
+		t.Fatalf("Backspace did not restore text: %q vs %q", s.entry.Text, before)
+	}
+	s.handleClick(1, surfaceH-toolkit.StatusbarH-2) // dead space
+	if s.keyTarget != nil {
+		t.Fatal("dead-space click should clear keyTarget")
+	}
+	if s.handleChar("x") || s.handleKeyDown("Enter") {
+		t.Fatal("no keyTarget → key handlers should be no-ops")
+	}
+}
+
+// TestChartHoverTooltip: hovering the active Notebook Line/Bar chart shows a
+// value tooltip; leaving hides it; a non-chart tab shows nothing.
+func TestChartHoverTooltip(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.draw(newSurface()) // sets the active page's bounds
+
+	lc := s.notebook.Tabs[0].Page.(*toolkit.LineChart)
+	lr := lc.Bounds()
+	if !s.handleHover(lr.X+lr.W/2, lr.Y+lr.H/2) || !s.tooltip.Visible || s.tooltip.Text == "" {
+		t.Fatalf("line-chart hover: visible=%v text=%q", s.tooltip.Visible, s.tooltip.Text)
+	}
+	s.draw(newSurface()) // renders the tooltip (covers Draw's Visible branch)
+
+	if !s.handleHover(1, 1) || s.tooltip.Visible { // leave the chart
+		t.Fatal("leaving the chart should hide the tooltip")
+	}
+	if s.handleHover(1, 1) { // already hidden → no change
+		t.Fatal("hover off-chart with no tooltip should report no change")
+	}
+
+	// Bar tab.
+	s.notebook.Active = 1
+	s.draw(newSurface())
+	bc := s.notebook.Tabs[1].Page.(*toolkit.BarChart)
+	br := bc.Bounds()
+	if !s.handleHover(br.X+br.W/2, br.Y+br.H/2) || !s.tooltip.Visible {
+		t.Fatal("bar-chart hover should show a tooltip")
+	}
+	// Non-chart (Pie) tab: hovering hides the tooltip.
+	s.notebook.Active = 2
+	s.draw(newSurface())
+	nb := s.notebook.Bounds()
+	if !s.handleHover(nb.X+nb.W/2, nb.Y+nb.H-4) || s.tooltip.Visible {
+		t.Fatal("hovering a non-chart tab should hide the tooltip")
+	}
+
+	// chartHoverText guards: outside the notebook, and an out-of-range Active.
+	if txt, _, _ := s.chartHoverText(1, 1); txt != "" {
+		t.Fatal("chartHoverText outside notebook should be empty")
+	}
+	s.notebook.Active = 99
+	if txt, _, _ := s.chartHoverText(nb.X+5, nb.Y+40); txt != "" {
+		t.Fatal("chartHoverText with bad Active should be empty")
+	}
+}
+
+// TestHandleMoveDragVsHover: handleMove drags while captured, else hovers.
+func TestHandleMoveDragVsHover(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.draw(newSurface())
+	lc := s.notebook.Tabs[0].Page.(*toolkit.LineChart)
+	lr := lc.Bounds()
+	if !s.handleMove(lr.X+lr.W/2, lr.Y+lr.H/2) { // no capture → hover
+		t.Fatal("handleMove should hover when not dragging")
+	}
+	s.dragTarget, s.dragBounds = s.kanban, s.kanban.Bounds() // simulate capture
+	if !s.handleMove(10, 10) {                               // → drag path
+		t.Fatal("handleMove should route a drag when captured")
+	}
+}
+
+func TestFtoa(t *testing.T) {
+	if ftoa(3) != "3" || ftoa(2.5) != "2.5" {
+		t.Fatalf("ftoa: %q %q", ftoa(3), ftoa(2.5))
+	}
+}
+
+// TestDropdownUpSelect covers the second dropdown's OnSelect closure.
+func TestDropdownUpSelect(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.notify.Visible = false
+	s.dropdownUp.Select(1)
+	if !s.notify.Visible {
+		t.Fatal("dropdownUp OnSelect did not fire a notification")
+	}
+}
