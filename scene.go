@@ -1006,6 +1006,10 @@ func newState(w, _ int) *state {
 		s.carousel, s.mdEditor, s.dateRange,
 		// Column C Wave 5 extension
 		s.wizard, s.treeTable, s.paletteBtn,
+		// Wave 6 (v0.81) editable/selectable data widgets — a left click must
+		// reach them to open the inline cell editor (gridEdit / propGrid) or
+		// move the selection (table / dataView) and focus them for keyboard.
+		s.propGrid, s.pagingBar, s.gridEdit, s.dataView, s.table,
 		// Full-width band — the app-shell Border routes clicks to its
 		// collapsible sidebar (title toggles collapse) + the Paned grip.
 		s.appBorder,
@@ -1194,49 +1198,59 @@ func (s *state) handleHover(x, y int) bool {
 }
 
 // notebookLine returns the active Notebook page when it is a LineChart, else nil.
-func (s *state) notebookLine() *toolkit.LineChart {
+// notebookPage returns the active Notebook page widget, or nil.
+func (s *state) notebookPage() toolkit.Widget {
 	if s.notebook.Active >= 0 && s.notebook.Active < len(s.notebook.Tabs) {
-		if lc, ok := s.notebook.Tabs[s.notebook.Active].Page.(*toolkit.LineChart); ok {
-			return lc
-		}
+		return s.notebook.Tabs[s.notebook.Active].Page
 	}
 	return nil
 }
 
-// notebookBar returns the active Notebook page when it is a BarChart, else nil.
-func (s *state) notebookBar() *toolkit.BarChart {
-	if s.notebook.Active >= 0 && s.notebook.Active < len(s.notebook.Tabs) {
-		if bc, ok := s.notebook.Tabs[s.notebook.Active].Page.(*toolkit.BarChart); ok {
-			return bc
-		}
-	}
-	return nil
-}
-
-// clearChartHovers turns off the crosshair on every hoverable curve chart.
+// clearChartHovers turns off the hover highlight on every hoverable chart.
 func (s *state) clearChartHovers() {
-	if lc := s.notebookLine(); lc != nil {
-		lc.Hover = false
+	switch c := s.notebookPage().(type) {
+	case *toolkit.LineChart:
+		c.Hover = false
+	case *toolkit.BarChart:
+		c.Hover = false
+	case *toolkit.PieChart:
+		c.Hover = false
 	}
 	s.areaChart.Hover = false
+	s.scatterChart.Hover = false
+	s.radarChart.Hover = false
+	s.sparkLine.Hover = false
+	s.sparkBar.Hover = false
 }
 
+// chVal is the standard "#index = value" tooltip label.
+func chVal(i int, v float64) string { return "#" + itoa(i) + " = " + ftoa(v) }
+
 // chartHoverText returns the tooltip text + anchor for the chart under (x, y),
-// and — for the Line/Area curve charts — arms their hover crosshair at the
-// matched data point. Empty text means no chart is under the cursor.
+// arming that chart's hover highlight (crosshair / bar / slice / point / spoke).
+// Empty text means no chart is under the cursor.
 func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
-	if lc := s.notebookLine(); lc != nil {
-		if r := lc.Bounds(); inside(x, y, r) {
-			if i, v, ok := lc.ValueAt(x - r.X); ok {
-				lc.Hover, lc.HoverIndex = true, i
-				return "#" + itoa(i) + " = " + ftoa(v), x, y
+	// Active Notebook page (Line / Bar / Pie).
+	switch c := s.notebookPage().(type) {
+	case *toolkit.LineChart:
+		if r := c.Bounds(); inside(x, y, r) {
+			if i, v, ok := c.ValueAt(x - r.X); ok {
+				c.Hover, c.HoverIndex = true, i
+				return chVal(i, v), x, y
 			}
 		}
-	}
-	if bc := s.notebookBar(); bc != nil {
-		if r := bc.Bounds(); inside(x, y, r) {
-			if i, v, ok := bc.ValueAt(x - r.X); ok {
-				return "#" + itoa(i) + " = " + ftoa(v), x, y
+	case *toolkit.BarChart:
+		if r := c.Bounds(); inside(x, y, r) {
+			if i, v, ok := c.ValueAt(x - r.X); ok {
+				c.Hover, c.HoverIndex = true, i
+				return chVal(i, v), x, y
+			}
+		}
+	case *toolkit.PieChart:
+		if r := c.Bounds(); inside(x, y, r) {
+			if i, v, ok := c.SliceAt(x-r.X, y-r.Y); ok {
+				c.Hover, c.HoverIndex = true, i
+				return chVal(i, v), x, y
 			}
 		}
 	}
@@ -1244,7 +1258,30 @@ func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
 	if r := s.areaChart.Bounds(); inside(x, y, r) {
 		if i, v, ok := s.areaChart.ValueAt(x - r.X); ok {
 			s.areaChart.Hover, s.areaChart.HoverIndex = true, i
-			return "#" + itoa(i) + " = " + ftoa(v), x, y
+			return chVal(i, v), x, y
+		}
+	}
+	// Wave-7 ScatterChart (nearest point → its X,Y + ring).
+	if r := s.scatterChart.Bounds(); inside(x, y, r) {
+		if si, pi, pt, ok := s.scatterChart.NearestPoint(x-r.X, y-r.Y); ok {
+			s.scatterChart.Hover, s.scatterChart.HoverSeries, s.scatterChart.HoverPoint = true, si, pi
+			return "(" + ftoa(pt.X) + ", " + ftoa(pt.Y) + ")", x, y
+		}
+	}
+	// Wave-7 RadarChart (nearest axis → its label + first-series value + spoke).
+	if r := s.radarChart.Bounds(); inside(x, y, r) {
+		if k, ok := s.radarChart.AxisAt(x-r.X, y-r.Y); ok && len(s.radarChart.Series) > 0 && k < len(s.radarChart.Series[0]) {
+			s.radarChart.Hover, s.radarChart.HoverAxis = true, k
+			return s.radarChart.Axes[k] + " = " + ftoa(s.radarChart.Series[0][k]), x, y
+		}
+	}
+	// Sparklines (value + crosshair/bar highlight).
+	for _, sp := range []*toolkit.Sparkline{s.sparkLine, s.sparkBar} {
+		if r := sp.Bounds(); inside(x, y, r) {
+			if i, v, ok := sp.ValueAt(x - r.X); ok {
+				sp.Hover, sp.HoverIndex = true, i
+				return chVal(i, v), x, y
+			}
 		}
 	}
 	return "", 0, 0
