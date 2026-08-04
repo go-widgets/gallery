@@ -840,12 +840,16 @@ func TestChartHoverTooltip(t *testing.T) {
 	if !s.handleHover(br.X+br.W/2, br.Y+br.H/2) || !s.tooltip.Visible {
 		t.Fatal("bar-chart hover should show a tooltip")
 	}
-	// Non-chart (Pie) tab: hovering hides the tooltip.
+	// Pie tab: hovering the disc shows a slice value; hovering off-chart hides.
 	s.notebook.Active = 2
 	s.draw(newSurface())
 	nb := s.notebook.Bounds()
-	if !s.handleHover(nb.X+nb.W/2, nb.Y+nb.H-4) || s.tooltip.Visible {
-		t.Fatal("hovering a non-chart tab should hide the tooltip")
+	pc := s.notebook.Tabs[2].Page.(*toolkit.PieChart)
+	if !s.handleHover(pc.Bounds().X+pc.Bounds().W/2+3, pc.Bounds().Y+pc.Bounds().H/2) || !s.tooltip.Visible {
+		t.Fatal("pie-slice hover should show a tooltip")
+	}
+	if !s.handleHover(1, 1) || s.tooltip.Visible {
+		t.Fatal("hovering off every chart should hide the tooltip")
 	}
 
 	// chartHoverText guards: outside the notebook, and an out-of-range Active.
@@ -919,4 +923,30 @@ func TestAreaChartHoverCrosshair(t *testing.T) {
 	if s.areaChart.Hover {
 		t.Fatal("leaving the chart should clear the area crosshair")
 	}
+}
+
+// TestAllChartsHover: every remaining chart (Scatter/Radar/Sparklines) shows a
+// value tooltip and arms its hover highlight.
+func TestAllChartsHover(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	s.draw(newSurface())
+
+	sr := s.scatterChart.Bounds()
+	if !s.handleHover(sr.X+sr.W/2, sr.Y+sr.H/2) || !s.tooltip.Visible || !s.scatterChart.Hover {
+		t.Fatal("scatter hover should show a tooltip + ring")
+	}
+	rr := s.radarChart.Bounds()
+	if !s.handleHover(rr.X+rr.W/2, rr.Y+rr.H/4) || !s.tooltip.Visible || !s.radarChart.Hover {
+		t.Fatal("radar hover should show a tooltip + spoke")
+	}
+	sl := s.sparkLine.Bounds()
+	if !s.handleHover(sl.X+sl.W/2, sl.Y+sl.H/2) || !s.tooltip.Visible || !s.sparkLine.Hover {
+		t.Fatal("sparkLine hover should show a tooltip + crosshair")
+	}
+	sb := s.sparkBar.Bounds()
+	if !s.handleHover(sb.X+sb.W/2, sb.Y+sb.H/2) || !s.tooltip.Visible || !s.sparkBar.Hover {
+		t.Fatal("sparkBar hover should show a tooltip + highlight")
+	}
+	// A draw after arming exercises the hover-highlight render paths.
+	s.draw(newSurface())
 }
