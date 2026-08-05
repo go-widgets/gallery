@@ -274,7 +274,7 @@ func TestClickEntryFocuses(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.entry.Bounds()
 	s.handleClick(r.X+10, r.Y+r.H/2)
-	if !s.entry.Focused {
+	if !s.entry.Focused() {
 		t.Fatal("Entry click should focus the entry")
 	}
 }
