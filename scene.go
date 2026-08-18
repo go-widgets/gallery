@@ -458,7 +458,7 @@ func newState(w, _ int) *state {
 	for _, r := range s.radios {
 		s.radioGroup.Add(r)
 	}
-	s.radios[0].Checked = true
+	s.radios[0].Checked().Set(true)
 
 	s.entry = toolkit.NewEntry("editable text")
 	s.spin = toolkit.NewSpinButton(0, 100, 42, 1)
@@ -734,7 +734,7 @@ func newState(w, _ int) *state {
 	dvSwatch := []toolkit.RGBA{toolkit.RGB(0xe0, 0x50, 0x50), toolkit.RGB(0x50, 0xa0, 0xe0), toolkit.RGB(0x50, 0xb0, 0x70), toolkit.RGB(0xc0, 0x80, 0xe0)}
 	s.dataView = toolkit.NewListBox([]string{"Reddit", "Hacker News", "Lobsters", "GitHub"})
 	s.dataView.RowHeight = 32
-	s.dataView.Selected = 1
+	s.dataView.Selected().Set(1)
 	s.dataView.ItemRenderer = func(p painter.Painter, theme *toolkit.Theme, rc toolkit.Rect, i int, item string, sel bool, ink toolkit.RGBA) {
 		p.FillRect(painter.Rect{X: rc.X + 8, Y: rc.Y + rc.H/2 - 6, W: 12, H: 12}, dvSwatch[i])
 		title := toolkit.NewLabel(item)
@@ -823,7 +823,8 @@ func newState(w, _ int) *state {
 		{Title: "Done", Cards: []toolkit.KanbanCard{
 			{Title: "Ship", Subtitle: "v1", Accent: toolkit.RGB(0x1e, 0x9e, 0x52)}}},
 	})
-	s.kanban.SelectedCol, s.kanban.SelectedCard = 1, 0 // highlight the "Doing" card
+	s.kanban.SelectedCol().Set(1)  // highlight the "Doing" column
+	s.kanban.SelectedCard().Set(0) // and its first card
 
 	s.gantt = toolkit.NewGantt([]toolkit.GanttTask{
 		{Label: "Design", Start: 0, End: 3, Progress: 1.0},
@@ -831,7 +832,7 @@ func newState(w, _ int) *state {
 		{Label: "Test", Start: 7, End: 10, Progress: 0.2, Fill: toolkit.RGB(0x50, 0xa0, 0xe0)},
 		{Label: "Ship", Start: 10, End: 12, Fill: toolkit.RGB(0x1e, 0x9e, 0x52)},
 	})
-	s.gantt.Selected = 1 // highlight the "Build" task
+	s.gantt.Selected().Set(1) // highlight the "Build" task
 	// Drag a card between columns (v0.83 interactivity).
 	s.kanban.OnCardMove = func(fromCol, fromCard, toCol, toIdx int) {
 		s.showNotify("Moved card to " + s.kanban.Columns[toCol].Title)
