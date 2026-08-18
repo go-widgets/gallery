@@ -724,8 +724,8 @@ func TestAgendaSwitcherChangesView(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	ar := s.agendaSwitcher.Bounds()
 	s.handleClick(ar.X+ar.W/8, ar.Y+ar.H/2) // segment 0 centre ("Week")
-	if s.agenda.View != toolkit.AgendaWeek {
-		t.Fatalf("Agenda view = %d, want AgendaWeek (%d)", s.agenda.View, toolkit.AgendaWeek)
+	if s.agenda.View().Get() != toolkit.AgendaWeek {
+		t.Fatalf("Agenda view = %d, want AgendaWeek (%d)", s.agenda.View().Get(), toolkit.AgendaWeek)
 	}
 }
 
@@ -757,8 +757,10 @@ func TestAgendaAddEvent(t *testing.T) {
 // OnEventEdited → a notification.
 func TestAgendaEventEditing(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
-	// A chip click fires OnSelect, which opens the toolkit editor on that event.
-	s.agenda.OnSelect(0)
+	// A chip click Sets the Agenda's Selected event; the gallery's subscription
+	// opens the toolkit editor on that event. Selected starts at -1, so Set(0)
+	// is a genuine change and notifies.
+	s.agenda.Selected().Set(0)
 	if s.agenda.Editing() != 0 {
 		t.Fatalf("Editing()=%d, want 0 (editor open)", s.agenda.Editing())
 	}
