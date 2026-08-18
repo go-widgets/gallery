@@ -888,12 +888,12 @@ func TestChartHoverTooltip(t *testing.T) {
 
 	lc := s.notebook.Tabs[0].Page.(*toolkit.LineChart)
 	lr := lc.Bounds()
-	if !s.handleHover(lr.X+lr.W/2, lr.Y+lr.H/2) || !s.tooltip.Visible || s.tooltip.Text == "" {
-		t.Fatalf("line-chart hover: visible=%v text=%q", s.tooltip.Visible, s.tooltip.Text)
+	if !s.handleHover(lr.X+lr.W/2, lr.Y+lr.H/2) || !s.tooltip.Visible().Get() || s.tooltip.Text == "" {
+		t.Fatalf("line-chart hover: visible=%v text=%q", s.tooltip.Visible().Get(), s.tooltip.Text)
 	}
 	s.draw(newSurface()) // renders the tooltip (covers Draw's Visible branch)
 
-	if !s.handleHover(1, 1) || s.tooltip.Visible { // leave the chart
+	if !s.handleHover(1, 1) || s.tooltip.Visible().Get() { // leave the chart
 		t.Fatal("leaving the chart should hide the tooltip")
 	}
 	if s.handleHover(1, 1) { // already hidden → no change
@@ -905,7 +905,7 @@ func TestChartHoverTooltip(t *testing.T) {
 	s.draw(newSurface())
 	bc := s.notebook.Tabs[1].Page.(*toolkit.BarChart)
 	br := bc.Bounds()
-	if !s.handleHover(br.X+br.W/2, br.Y+br.H/2) || !s.tooltip.Visible {
+	if !s.handleHover(br.X+br.W/2, br.Y+br.H/2) || !s.tooltip.Visible().Get() {
 		t.Fatal("bar-chart hover should show a tooltip")
 	}
 	// Pie tab: hovering the disc shows a slice value; hovering off-chart hides.
@@ -913,10 +913,10 @@ func TestChartHoverTooltip(t *testing.T) {
 	s.draw(newSurface())
 	nb := s.notebook.Bounds()
 	pc := s.notebook.Tabs[2].Page.(*toolkit.PieChart)
-	if !s.handleHover(pc.Bounds().X+pc.Bounds().W/2+3, pc.Bounds().Y+pc.Bounds().H/2) || !s.tooltip.Visible {
+	if !s.handleHover(pc.Bounds().X+pc.Bounds().W/2+3, pc.Bounds().Y+pc.Bounds().H/2) || !s.tooltip.Visible().Get() {
 		t.Fatal("pie-slice hover should show a tooltip")
 	}
-	if !s.handleHover(1, 1) || s.tooltip.Visible {
+	if !s.handleHover(1, 1) || s.tooltip.Visible().Get() {
 		t.Fatal("hovering off every chart should hide the tooltip")
 	}
 
@@ -977,7 +977,7 @@ func TestAreaChartHoverCrosshair(t *testing.T) {
 
 	// Area chart hover: value tooltip + crosshair.
 	ar := s.areaChart.Bounds()
-	if !s.handleHover(ar.X+ar.W/2, ar.Y+ar.H/2) || !s.tooltip.Visible {
+	if !s.handleHover(ar.X+ar.W/2, ar.Y+ar.H/2) || !s.tooltip.Visible().Get() {
 		t.Fatal("area-chart hover did not show a tooltip")
 	}
 	if !s.areaChart.Hover {
@@ -1000,19 +1000,19 @@ func TestAllChartsHover(t *testing.T) {
 	s.draw(newSurface())
 
 	sr := s.scatterChart.Bounds()
-	if !s.handleHover(sr.X+sr.W/2, sr.Y+sr.H/2) || !s.tooltip.Visible || !s.scatterChart.Hover {
+	if !s.handleHover(sr.X+sr.W/2, sr.Y+sr.H/2) || !s.tooltip.Visible().Get() || !s.scatterChart.Hover {
 		t.Fatal("scatter hover should show a tooltip + ring")
 	}
 	rr := s.radarChart.Bounds()
-	if !s.handleHover(rr.X+rr.W/2, rr.Y+rr.H/4) || !s.tooltip.Visible || !s.radarChart.Hover {
+	if !s.handleHover(rr.X+rr.W/2, rr.Y+rr.H/4) || !s.tooltip.Visible().Get() || !s.radarChart.Hover {
 		t.Fatal("radar hover should show a tooltip + spoke")
 	}
 	sl := s.sparkLine.Bounds()
-	if !s.handleHover(sl.X+sl.W/2, sl.Y+sl.H/2) || !s.tooltip.Visible || !s.sparkLine.Hover {
+	if !s.handleHover(sl.X+sl.W/2, sl.Y+sl.H/2) || !s.tooltip.Visible().Get() || !s.sparkLine.Hover().Get() {
 		t.Fatal("sparkLine hover should show a tooltip + crosshair")
 	}
 	sb := s.sparkBar.Bounds()
-	if !s.handleHover(sb.X+sb.W/2, sb.Y+sb.H/2) || !s.tooltip.Visible || !s.sparkBar.Hover {
+	if !s.handleHover(sb.X+sb.W/2, sb.Y+sb.H/2) || !s.tooltip.Visible().Get() || !s.sparkBar.Hover().Get() {
 		t.Fatal("sparkBar hover should show a tooltip + highlight")
 	}
 	// A draw after arming exercises the hover-highlight render paths.
