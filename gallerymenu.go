@@ -280,8 +280,8 @@ func (s *state) treeMenu(tv *toolkit.TreeView, node *toolkit.TreeNode) *toolkit.
 		items = append(items, toolkit.MenuItem{Separator: true})
 		items = append(items, toolkit.MenuItem{Label: "Delete node", Action: func() {
 			if tv.Remove(node) {
-				if tv.Selected == node {
-					tv.Selected = nil
+				if tv.Selected().Get() == node {
+					tv.Selected().Set(nil)
 				}
 				s.showNotify("Node deleted")
 			}
@@ -316,8 +316,8 @@ func (s *state) treeTableMenu(node *toolkit.TreeTableNode) *toolkit.Menu {
 	items = append(items, toolkit.MenuItem{Separator: true})
 	items = append(items, toolkit.MenuItem{Label: "Delete node", Action: func() {
 		if s.treeTable.Remove(node) {
-			if s.treeTable.Selected == node {
-				s.treeTable.Selected = nil
+			if s.treeTable.Selected().Get() == node {
+				s.treeTable.Selected().Set(nil)
 			}
 			s.showNotify("Row deleted")
 		}

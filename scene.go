@@ -554,7 +554,7 @@ func newState(w, _ int) *state {
 	s.headerBar.Subtitle = "~/Documents"
 
 	s.toast = toolkit.NewToast("Copied to clipboard", toolkit.ToastSuccess)
-	s.toast.Visible = true
+	s.toast.Visible().Set(true)
 
 	s.banner = toolkit.NewBanner("Update available.")
 	s.banner.ButtonLabel = "Install"
@@ -584,8 +584,8 @@ func newState(w, _ int) *state {
 	// Stat + ProgressCircle sit side by side, then a Timeline, then Chip +
 	// SplitButton side by side; colC arranges the rows via HBox.
 	s.stat = toolkit.NewStat("Requests / min", "12,845")
-	s.stat.Change = "+8.3%"
-	s.stat.Trend = toolkit.StatUp
+	s.stat.Change().Set("+8.3%")
+	s.stat.Trend().Set(toolkit.StatUp)
 	s.progressCircle = toolkit.NewProgressCircle()
 	s.progressCircle.Fraction().Set(0.66)
 
@@ -697,7 +697,7 @@ func newState(w, _ int) *state {
 	s.propGrid.Add("Height", "768")
 	s.propGrid.Add("Title", "Untitled")
 	s.propGrid.Add("Visible", "true")
-	s.propGrid.Table().Selected = 2
+	s.propGrid.Table().Selected().Set(2)
 	// Open the editor on the "Title" value cell so the demo shows editing.
 	s.propGrid.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: colW - 40, Y: toolkit.TableHeaderHeight + 2*toolkit.TableRowHeight + 2})
 
@@ -1221,7 +1221,7 @@ func (s *state) handleHover(x, y int) bool {
 	s.clearChartHovers() // drop any previous crosshair before re-testing
 	txt, ax, ay := s.chartHoverText(x, y)
 	if txt == "" {
-		if s.tooltip.Visible {
+		if s.tooltip.Visible().Get() {
 			s.tooltip.Hide()
 			return true
 		}
@@ -1254,8 +1254,8 @@ func (s *state) clearChartHovers() {
 	s.areaChart.Hover = false
 	s.scatterChart.Hover = false
 	s.radarChart.Hover = false
-	s.sparkLine.Hover = false
-	s.sparkBar.Hover = false
+	s.sparkLine.Hover().Set(false)
+	s.sparkBar.Hover().Set(false)
 }
 
 // chVal is the standard "#index = value" tooltip label.
@@ -1314,7 +1314,8 @@ func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
 	for _, sp := range []*toolkit.Sparkline{s.sparkLine, s.sparkBar} {
 		if r := sp.Bounds(); inside(x, y, r) {
 			if i, v, ok := sp.ValueAt(x - r.X); ok {
-				sp.Hover, sp.HoverIndex = true, i
+				sp.Hover().Set(true)
+				sp.HoverIndex().Set(i)
 				return chVal(i, v), x, y
 			}
 		}
