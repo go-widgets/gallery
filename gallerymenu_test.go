@@ -299,10 +299,10 @@ func TestContextMenuTreeActions(t *testing.T) {
 	if !menuHasLabel(leafMenu, "Delete node") {
 		t.Fatal("non-root leaf menu must offer Delete node")
 	}
-	s.tree.Selected = leaf
+	s.tree.Selected().Set(leaf)
 	// Delete node is the last item.
 	leafMenu.Items[len(leafMenu.Items)-1].Action()
-	if s.tree.Selected != nil {
+	if s.tree.Selected().Get() != nil {
 		t.Fatal("deleting the selected node did not clear Selected")
 	}
 	for _, c := range s.tree.Root.Children {
@@ -385,9 +385,9 @@ func TestContextMenuTreeTable(t *testing.T) {
 	if menuHasLabel(lm, "Toggle expand") {
 		t.Fatal("leaf menu must not offer Toggle expand")
 	}
-	s.treeTable.Selected = leaf
+	s.treeTable.Selected().Set(leaf)
 	lm.Items[len(lm.Items)-1].Action() // Delete node
-	if s.treeTable.Selected != nil {
+	if s.treeTable.Selected().Get() != nil {
 		t.Fatal("deleting the selected node did not clear Selected")
 	}
 	for _, c := range group.Children {
