@@ -124,7 +124,8 @@ func (s *state) kanbanMenu(col, card int) *toolkit.Menu {
 			cards := s.kanban.Columns[col].Cards
 			if card < len(cards) {
 				s.kanban.Columns[col].Cards = append(cards[:card], cards[card+1:]...)
-				s.kanban.SelectedCol, s.kanban.SelectedCard = -1, -1
+				s.kanban.SelectedCol().Set(-1)
+				s.kanban.SelectedCard().Set(-1)
 				s.showNotify("Card deleted")
 			}
 		}},
@@ -163,7 +164,7 @@ func (s *state) ganttMenu(row int) *toolkit.Menu {
 		{Label: "Delete task", Action: func() {
 			label := tk().Label
 			s.gantt.Tasks = append(s.gantt.Tasks[:row], s.gantt.Tasks[row+1:]...)
-			s.gantt.Selected = -1
+			s.gantt.Selected().Set(-1)
 			s.showNotify(label + " deleted")
 		}},
 	})
@@ -190,14 +191,14 @@ func (s *state) listMenu(lb *toolkit.ListBox, i int) *toolkit.Menu {
 		{Label: "Move up", Action: func() {
 			if it := items(); i > 0 && i < len(it) {
 				it[i-1], it[i] = it[i], it[i-1]
-				lb.Selected = i - 1
+				lb.Selected().Set(i - 1)
 				s.showNotify("Item moved up")
 			}
 		}},
 		{Label: "Move down", Action: func() {
 			if it := items(); i >= 0 && i < len(it)-1 {
 				it[i+1], it[i] = it[i], it[i+1]
-				lb.Selected = i + 1
+				lb.Selected().Set(i + 1)
 				s.showNotify("Item moved down")
 			}
 		}},
@@ -214,7 +215,7 @@ func (s *state) listMenu(lb *toolkit.ListBox, i int) *toolkit.Menu {
 		{Label: "Delete", Action: func() {
 			if it := items(); i >= 0 && i < len(it) {
 				lb.Items = append(it[:i], it[i+1:]...)
-				lb.Selected = -1
+				lb.Selected().Set(-1)
 				s.showNotify("Item deleted")
 			}
 		}},
