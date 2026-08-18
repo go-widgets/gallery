@@ -8,8 +8,37 @@ package main
 import (
 	"testing"
 
+	"github.com/go-widgets/mvvm"
 	"github.com/go-widgets/toolkit"
 )
+
+// TestBindTwoWay covers the local two-way Observable bridge: seed, both
+// directions, and the unbind that detaches them.
+func TestBindTwoWay(t *testing.T) {
+	a := mvvm.NewObservable(0)
+	b := mvvm.NewObservable(9)
+	unbind := bindTwoWay(a, b)
+	if b.Get() != 0 {
+		t.Fatalf("seed: b=%d, want a's 0", b.Get())
+	}
+	a.Set(3)
+	if b.Get() != 3 {
+		t.Fatalf("a→b: b=%d", b.Get())
+	}
+	b.Set(5)
+	if a.Get() != 5 {
+		t.Fatalf("b→a: a=%d", a.Get())
+	}
+	unbind()
+	a.Set(7)
+	if b.Get() != 5 {
+		t.Fatal("unbind: a→b must stop")
+	}
+	b.Set(8)
+	if a.Get() != 7 {
+		t.Fatal("unbind: b→a must stop")
+	}
+}
 
 // TestViewModelThemeBindingTwoWay: setting vm.themeIndex programmatically must
 // drive both the switcher's Current and the applied theme (the VM->widget
@@ -18,8 +47,8 @@ func TestViewModelThemeBindingTwoWay(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	for i := range s.themeNames {
 		s.vm.themeIndex.Set(i)
-		if s.themeSwitcher.Current != i {
-			t.Fatalf("themeIndex.Set(%d): switcher.Current=%d", i, s.themeSwitcher.Current)
+		if s.themeSwitcher.Current().Get() != i {
+			t.Fatalf("themeIndex.Set(%d): switcher.Current=%d", i, s.themeSwitcher.Current().Get())
 		}
 		if s.theme != s.themes[i] {
 			t.Fatalf("themeIndex.Set(%d) did not apply theme %q", i, s.themeNames[i])
@@ -33,8 +62,8 @@ func TestViewModelAgendaViewBindingTwoWay(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	for _, v := range []toolkit.AgendaView{toolkit.AgendaWeek, toolkit.AgendaMonth, toolkit.AgendaQuarter, toolkit.AgendaYear} {
 		s.vm.agendaView.Set(int(v))
-		if s.agendaSwitcher.Current != int(v) {
-			t.Fatalf("agendaView.Set(%d): switcher.Current=%d", v, s.agendaSwitcher.Current)
+		if s.agendaSwitcher.Current().Get() != int(v) {
+			t.Fatalf("agendaView.Set(%d): switcher.Current=%d", v, s.agendaSwitcher.Current().Get())
 		}
 		if s.agenda.View != v {
 			t.Fatalf("agendaView.Set(%d): agenda.View=%d", v, s.agenda.View)

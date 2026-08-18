@@ -107,8 +107,8 @@ func TestDrawDumpsEveryThemeToPNG(t *testing.T) {
 		// Mirror what ViewSwitcher's own OnEvent does on a click:
 		// updates Current then fires OnChange. Direct OnChange calls
 		// would leave the visual "selected" state stuck on 0.
-		s.themeSwitcher.Current = i
-		s.themeSwitcher.OnChange(i)
+		s.themeSwitcher.Current().Set(i)
+		s.themeSwitcher.Current().Set(i)
 		surf := newSurface()
 		s.draw(surf)
 		path := filepath.Join(dir, "scene-"+name+".png")
@@ -233,7 +233,7 @@ func TestClickToggleFiresOnToggle(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.toggle.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
-	if !s.toggle.Pressed {
+	if !s.toggle.Pressed().Get() {
 		t.Fatal("Toggle click did not flip Pressed to true")
 	}
 	if !s.notify.Visible {
@@ -241,7 +241,7 @@ func TestClickToggleFiresOnToggle(t *testing.T) {
 	}
 	// Click again — flips back.
 	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
-	if s.toggle.Pressed {
+	if s.toggle.Pressed().Get() {
 		t.Fatal("second Toggle click did not flip Pressed back")
 	}
 }
@@ -340,7 +340,9 @@ func TestAllToggleBranches(t *testing.T) {
 	// Directly exercise the OFF branch of s.toggle.OnToggle (the ON
 	// branch is covered by TestClickToggleFiresOnToggle → true).
 	s := newState(surfaceW, surfaceH)
-	s.toggle.OnToggle(false)
+	s.toggle.Pressed().Set(true) // starts false; flip on so the next flip is a real change
+	s.notify.Text = ""
+	s.toggle.Pressed().Set(false)
 	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-3:] != "OFF" {
 		t.Fatalf("Toggle OFF branch not covered; text=%q", s.notify.Text)
 	}
@@ -354,17 +356,18 @@ func TestAllToggleBranches(t *testing.T) {
 func TestAllWaveCallbacks(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 
-	// Switch ON branch.
+	// Switch OFF branch (the switch starts ON from NewSwitch(true), so Set(false)
+	// is a real change).
 	s.notify.Text = ""
-	s.swtch.OnToggle(true)
-	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-2:] != "ON" {
-		t.Fatalf("Switch ON branch: text=%q", s.notify.Text)
-	}
-	// Switch OFF branch.
-	s.notify.Text = ""
-	s.swtch.OnToggle(false)
+	s.swtch.On().Set(false)
 	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-3:] != "OFF" {
 		t.Fatalf("Switch OFF branch: text=%q", s.notify.Text)
+	}
+	// Switch ON branch.
+	s.notify.Text = ""
+	s.swtch.On().Set(true)
+	if s.notify.Text == "" || s.notify.Text[len(s.notify.Text)-2:] != "ON" {
+		t.Fatalf("Switch ON branch: text=%q", s.notify.Text)
 	}
 
 	// Banner action.
@@ -393,15 +396,19 @@ func TestAllWaveCallbacks(t *testing.T) {
 		t.Fatal("SplitButton OnArrow did not show notify")
 	}
 
-	// Theme switcher — every segment installs its palette and fires notify.
+	// Theme switcher — every segment installs its palette and fires notify. The
+	// widget's Current() Observable dedups equal Sets, so move to another segment
+	// first to make each Set(i) a genuine change (only the neverEq view-model
+	// re-applies on the same value).
 	for i, name := range s.themeNames {
+		s.themeSwitcher.Current().Set((i + 1) % len(s.themeNames))
 		s.notify.Text = ""
-		s.themeSwitcher.OnChange(i)
+		s.themeSwitcher.Current().Set(i)
 		if s.theme != s.themes[i] {
-			t.Fatalf("themeSwitcher OnChange(%d) did not swap s.theme to %q", i, name)
+			t.Fatalf("themeSwitcher select(%d) did not swap s.theme to %q", i, name)
 		}
 		if s.notify.Text == "" {
-			t.Fatalf("themeSwitcher OnChange(%d) did not show notify for %q", i, name)
+			t.Fatalf("themeSwitcher select(%d) did not show notify for %q", i, name)
 		}
 	}
 }
@@ -477,8 +484,8 @@ func TestClickNotebookSideSwitchesTab(t *testing.T) {
 	// Tab strip runs down the left edge; tab 1 ("B") sits one
 	// NotebookTabStripH below tab 0.
 	s.handleClick(r.X+10, r.Y+toolkit.NotebookTabStripH+4)
-	if s.notebookSide.Active != 1 {
-		t.Fatalf("clicking the second left-side tab should select it; Active=%d", s.notebookSide.Active)
+	if s.notebookSide.Active().Get() != 1 {
+		t.Fatalf("clicking the second left-side tab should select it; Active=%d", s.notebookSide.Active().Get())
 	}
 }
 
@@ -488,7 +495,7 @@ func TestClickDropdownUpToggles(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.dropdownUp.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
-	if !s.dropdownUp.Open {
+	if !s.dropdownUp.Open().Get() {
 		t.Fatal("clicking dropdownUp should open its popover")
 	}
 	pop := s.dropdownUp.PopoverBounds()
@@ -514,7 +521,7 @@ func TestFillBGCoversWholeSurface(t *testing.T) {
 // TestWave4ParamsWired for the newest wave.
 func TestWave5WidgetsPopulated(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
-	if s.accordion == nil || len(s.accordion.Sections) != 3 || s.accordion.Expanded != 1 {
+	if s.accordion == nil || len(s.accordion.Sections) != 3 || s.accordion.Expanded().Get() != 1 {
 		t.Fatal("accordion should have 3 sections with the second pre-expanded")
 	}
 	if s.colorPicker == nil || s.colorPicker.OnChange == nil {
@@ -816,7 +823,7 @@ func TestDropDownPopover(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	dr := s.dropdown.Bounds()
 	s.handleClick(dr.X+dr.W/2, dr.Y+dr.H/2) // open via the control
-	if !s.dropdown.Open {
+	if !s.dropdown.Open().Get() {
 		t.Fatal("dropdown did not open")
 	}
 	s.draw(newSurface()) // renders the popover (covers the draw branch)
@@ -824,10 +831,10 @@ func TestDropDownPopover(t *testing.T) {
 	pb := s.dropdown.PopoverBounds()
 	s.notify.Visible = false
 	s.handleClick(pb.X+5, pb.Y+toolkit.PopoverRowH+2) // click option row 1
-	if s.dropdown.Selected != 1 {
-		t.Fatalf("Selected=%d, want 1", s.dropdown.Selected)
+	if s.dropdown.Selected().Get() != 1 {
+		t.Fatalf("Selected=%d, want 1", s.dropdown.Selected().Get())
 	}
-	if s.dropdown.Open {
+	if s.dropdown.Open().Get() {
 		t.Fatal("popover should close after a selection")
 	}
 	if !s.notify.Visible {
@@ -835,11 +842,11 @@ func TestDropDownPopover(t *testing.T) {
 	}
 	// Reopen, then an outside click dismisses it.
 	s.handleClick(dr.X+dr.W/2, dr.Y+dr.H/2)
-	if !s.dropdown.Open {
+	if !s.dropdown.Open().Get() {
 		t.Fatal("dropdown did not reopen")
 	}
 	s.handleClick(1, surfaceH-toolkit.StatusbarH-2) // dead space
-	if s.dropdown.Open {
+	if s.dropdown.Open().Get() {
 		t.Fatal("outside click should dismiss the popover")
 	}
 }
@@ -892,7 +899,7 @@ func TestChartHoverTooltip(t *testing.T) {
 	}
 
 	// Bar tab.
-	s.notebook.Active = 1
+	s.notebook.Active().Set(1)
 	s.draw(newSurface())
 	bc := s.notebook.Tabs[1].Page.(*toolkit.BarChart)
 	br := bc.Bounds()
@@ -900,7 +907,7 @@ func TestChartHoverTooltip(t *testing.T) {
 		t.Fatal("bar-chart hover should show a tooltip")
 	}
 	// Pie tab: hovering the disc shows a slice value; hovering off-chart hides.
-	s.notebook.Active = 2
+	s.notebook.Active().Set(2)
 	s.draw(newSurface())
 	nb := s.notebook.Bounds()
 	pc := s.notebook.Tabs[2].Page.(*toolkit.PieChart)
@@ -915,7 +922,7 @@ func TestChartHoverTooltip(t *testing.T) {
 	if txt, _, _ := s.chartHoverText(1, 1); txt != "" {
 		t.Fatal("chartHoverText outside notebook should be empty")
 	}
-	s.notebook.Active = 99
+	s.notebook.Active().Set(99)
 	if txt, _, _ := s.chartHoverText(nb.X+5, nb.Y+40); txt != "" {
 		t.Fatal("chartHoverText with bad Active should be empty")
 	}
