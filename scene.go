@@ -439,13 +439,13 @@ func newState(w, _ int) *state {
 	s.button = toolkit.NewButton("Click me", func() { s.showNotify("Button clicked") })
 
 	s.toggle = toolkit.NewToggleButton("Toggle", false)
-	s.toggle.OnToggle = func(on bool) {
+	s.toggle.Pressed().Subscribe(func(on bool) {
 		if on {
 			s.showNotify("Toggle: ON")
 		} else {
 			s.showNotify("Toggle: OFF")
 		}
-	}
+	})
 
 	s.check = toolkit.NewCheckButton("Enable feature", true)
 
@@ -464,7 +464,7 @@ func newState(w, _ int) *state {
 	s.spin = toolkit.NewSpinButton(0, 100, 42, 1)
 	s.scale = toolkit.NewScale(0, 100, 50)
 	s.dropdown = toolkit.NewDropDown([]string{"UTF-8", "Latin-1", "Shift-JIS"}, 0)
-	s.dropdown.OnSelect = func(i int) { s.showNotify("Encoding: " + s.dropdown.Options[i]) }
+	s.dropdown.Selected().Subscribe(func(i int) { s.showNotify("Encoding: " + s.dropdown.Options[i]) })
 
 	s.progress = toolkit.NewProgressBar()
 	s.progress.Fraction = 0.66
@@ -474,7 +474,7 @@ func newState(w, _ int) *state {
 	s.level.Value = 7
 
 	s.spinner = toolkit.NewSpinner()
-	s.spinner.Active = true
+	s.spinner.Active().Set(true)
 
 	// Notebook demo: three tabs each hosting a Label. Notebook.Draw
 	// re-sizes its active page to fill the body, which is exactly what
@@ -517,19 +517,19 @@ func newState(w, _ int) *state {
 	frameLabel := toolkit.NewLabel("nested widget inside Frame")
 	s.frameHost = toolkit.NewFrame(frameLabel)
 	s.expander = toolkit.NewExpander("Details", s.frameHost)
-	s.expander.Expanded = true
+	s.expander.Expanded().Set(true)
 
 	s.paned = toolkit.NewHPaned(toolkit.NewLabel("left pane"), toolkit.NewLabel("right pane"))
 
 	// --- Column A extension: Wave 1 (v0.7) — construction only ----------
 	s.swtch = toolkit.NewSwitch(true)
-	s.swtch.OnToggle = func(on bool) {
+	s.swtch.On().Subscribe(func(on bool) {
 		if on {
 			s.showNotify("Switch: ON")
 		} else {
 			s.showNotify("Switch: OFF")
 		}
-	}
+	})
 	s.alert = toolkit.NewAlert("Saved 3 minutes ago.", toolkit.AlertSuccess)
 	s.card = toolkit.NewCard("Card", "Title above.\nBody here.", "footer note")
 	s.steps = toolkit.NewSteps([]string{"Plan", "Build", "Test", "Ship"}, 1)
@@ -577,7 +577,7 @@ func newState(w, _ int) *state {
 
 	s.dropdownUp = toolkit.NewDropDown([]string{"Opens upward", "OpenUp = true"}, 0)
 	s.dropdownUp.OpenUp = true
-	s.dropdownUp.OnSelect = func(i int) { s.showNotify("Chose: " + s.dropdownUp.Options[i]) }
+	s.dropdownUp.Selected().Subscribe(func(i int) { s.showNotify("Chose: " + s.dropdownUp.Options[i]) })
 
 	// --- Column C extension: Wave 3 (v0.9) — construction only ----------
 	//
@@ -587,7 +587,7 @@ func newState(w, _ int) *state {
 	s.stat.Change = "+8.3%"
 	s.stat.Trend = toolkit.StatUp
 	s.progressCircle = toolkit.NewProgressCircle()
-	s.progressCircle.Fraction = 0.66
+	s.progressCircle.Fraction().Set(0.66)
 
 	s.timeline = toolkit.NewTimeline([]toolkit.TimelineEvent{
 		{Title: "PR opened", Kind: toolkit.TimelineDefault},
@@ -634,7 +634,7 @@ func newState(w, _ int) *state {
 		{Title: "Shipping", Body: toolkit.NewLabel("Ships in 2-3 business days")},
 		{Title: "Returns", Body: toolkit.NewLabel("30-day free returns")},
 	})
-	s.accordion.Expanded = 1
+	s.accordion.Expanded().Set(1)
 
 	s.colorPicker = toolkit.NewColorPicker(toolkit.RGB(0x35, 0x84, 0xe4))
 	s.colorPicker.OnChange = func(c toolkit.RGBA) { s.showNotify("ColorPicker changed") }
@@ -1234,8 +1234,8 @@ func (s *state) handleHover(x, y int) bool {
 // notebookLine returns the active Notebook page when it is a LineChart, else nil.
 // notebookPage returns the active Notebook page widget, or nil.
 func (s *state) notebookPage() toolkit.Widget {
-	if s.notebook.Active >= 0 && s.notebook.Active < len(s.notebook.Tabs) {
-		return s.notebook.Tabs[s.notebook.Active].Page
+	if s.notebook.Active().Get() >= 0 && s.notebook.Active().Get() < len(s.notebook.Tabs) {
+		return s.notebook.Tabs[s.notebook.Active().Get()].Page
 	}
 	return nil
 }

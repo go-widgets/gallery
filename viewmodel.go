@@ -21,6 +21,21 @@ import (
 // current switcher segment still re-applies + re-announces it.
 func neverEq(a, b int) bool { return false }
 
+// bindTwoWay two-way-binds a view-model Observable to a widget's accessor
+// Observable (e.g. ViewSwitcher.Current()), seeding the widget from the VM then
+// mirroring each side onto the other. mvvm.Observable.Set is a no-op on an equal
+// value, so the mirror converges. It replaces mvvm.BindField now that the widgets
+// expose their state as accessors rather than exported fields.
+func bindTwoWay[T any](vm, widget *mvvm.Observable[T]) func() {
+	widget.Set(vm.Get())
+	u1 := vm.Subscribe(func(v T) { widget.Set(v) })
+	u2 := widget.Subscribe(func(v T) { vm.Set(v) })
+	return func() {
+		u1()
+		u2()
+	}
+}
+
 // viewModel holds the gallery's interactive state as MVVM bindables.
 type viewModel struct {
 	// themeIndex two-way binds the theme ViewSwitcher; a subscription installs
@@ -54,14 +69,14 @@ func newViewModel(s *state) *viewModel {
 		s.theme = s.themes[i]
 		s.showNotify("Theme: " + s.themeNames[i])
 	})
-	vm.unbind = append(vm.unbind, mvvm.BindField(vm.themeIndex, &s.themeSwitcher.Current, &s.themeSwitcher.OnChange, nil))
+	vm.unbind = append(vm.unbind, bindTwoWay(vm.themeIndex, s.themeSwitcher.Current()))
 
 	// Agenda view: the switcher edits agendaView; the subscription sets the view.
 	vm.agendaView.Subscribe(func(i int) {
 		s.agenda.View = toolkit.AgendaView(i)
 		s.showNotify("Agenda view: " + s.agendaSwitcher.Views[i])
 	})
-	vm.unbind = append(vm.unbind, mvvm.BindField(vm.agendaView, &s.agendaSwitcher.Current, &s.agendaSwitcher.OnChange, nil))
+	vm.unbind = append(vm.unbind, bindTwoWay(vm.agendaView, s.agendaSwitcher.Current()))
 
 	// Events: mirror the ObservableList into the widget on every change, so a
 	// day-activate that appends an event repaints the Agenda.
