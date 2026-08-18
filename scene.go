@@ -784,11 +784,11 @@ func newState(w, _ int) *state {
 		{Title: "Retro", Y: 2026, M: 7, D: 24, Calendar: 3},
 	})
 	s.agenda.Calendars = s.agendaCals
-	s.agenda.View = toolkit.AgendaMonth
+	s.agenda.View().Set(toolkit.AgendaMonth)
 	s.agenda.Year, s.agenda.Month = 2026, 7
 	// Left click on an event opens the toolkit's inline editor (title + calendar
 	// picker); OnEventEdited fires when it commits.
-	s.agenda.OnSelect = func(i int) { s.agenda.EditEvent(i) }
+	s.agenda.Selected().Subscribe(func(i int) { s.agenda.EditEvent(i) })
 	s.agenda.OnEventEdited = func(i int) {
 		s.showNotify("Edited: " + s.agenda.Events[i].Title)
 	}
