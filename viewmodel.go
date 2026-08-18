@@ -73,7 +73,7 @@ func newViewModel(s *state) *viewModel {
 
 	// Agenda view: the switcher edits agendaView; the subscription sets the view.
 	vm.agendaView.Subscribe(func(i int) {
-		s.agenda.View = toolkit.AgendaView(i)
+		s.agenda.View().Set(toolkit.AgendaView(i))
 		s.showNotify("Agenda view: " + s.agendaSwitcher.Views[i])
 	})
 	vm.unbind = append(vm.unbind, bindTwoWay(vm.agendaView, s.agendaSwitcher.Current()))

@@ -34,7 +34,7 @@ func (s *state) handleContext(x, y int) bool {
 			return true
 		}
 	}
-	if r := s.agenda.Bounds(); inside(x, y, r) && s.agenda.View == toolkit.AgendaMonth {
+	if r := s.agenda.Bounds(); inside(x, y, r) && s.agenda.View().Get() == toolkit.AgendaMonth {
 		if yy, m, d, ok := s.agenda.DayAt(x-r.X, y-r.Y); ok {
 			s.ctxMenu.Menu = s.agendaMenu(yy, m, d)
 			s.ctxMenu.Popup(x, y)

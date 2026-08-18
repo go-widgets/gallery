@@ -65,8 +65,8 @@ func TestViewModelAgendaViewBindingTwoWay(t *testing.T) {
 		if s.agendaSwitcher.Current().Get() != int(v) {
 			t.Fatalf("agendaView.Set(%d): switcher.Current=%d", v, s.agendaSwitcher.Current().Get())
 		}
-		if s.agenda.View != v {
-			t.Fatalf("agendaView.Set(%d): agenda.View=%d", v, s.agenda.View)
+		if s.agenda.View().Get() != v {
+			t.Fatalf("agendaView.Set(%d): agenda.View=%d", v, s.agenda.View().Get())
 		}
 	}
 }
