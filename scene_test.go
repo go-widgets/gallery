@@ -47,7 +47,7 @@ func TestNewStatePopulatesEveryColumn(t *testing.T) {
 	if len(s.radios) != 3 {
 		t.Fatalf("expected 3 radio buttons, got %d", len(s.radios))
 	}
-	if !s.radios[0].Checked {
+	if !s.radios[0].Checked().Get() {
 		t.Fatal("first radio should start checked")
 	}
 	if s.entry == nil || s.spin == nil || s.scale == nil || s.dropdown == nil {
@@ -251,10 +251,10 @@ func TestClickRadioActivatesGroup(t *testing.T) {
 	// Click radio #2. First is checked by default; group.Add wires them.
 	r := s.radios[1].Bounds()
 	s.handleClick(r.X+5, r.Y+r.H/2)
-	if !s.radios[1].Checked {
+	if !s.radios[1].Checked().Get() {
 		t.Fatal("Radio 2 should be checked after click")
 	}
-	if s.radios[0].Checked {
+	if s.radios[0].Checked().Get() {
 		t.Fatal("Radio 1 should be cleared once Radio 2 is checked (group mutual-excl)")
 	}
 }
@@ -265,8 +265,8 @@ func TestClickListBoxSelects(t *testing.T) {
 	// Click 2 rows down.
 	rowH := s.listBox.RowHeight
 	s.handleClick(r.X+10, r.Y+rowH*2+rowH/2)
-	if s.listBox.Selected < 0 {
-		t.Fatalf("ListBox click did not select a row; Selected=%d", s.listBox.Selected)
+	if s.listBox.Selected().Get() < 0 {
+		t.Fatalf("ListBox click did not select a row; Selected=%d", s.listBox.Selected().Get())
 	}
 }
 
@@ -564,13 +564,13 @@ func TestWave6WidgetsPopulated(t *testing.T) {
 	if s.propGrid == nil || s.propGrid.Value("Width") != "1024" {
 		t.Fatal("propGrid should be populated with a Width property")
 	}
-	if s.pagingBar == nil || s.pagingBar.Page != 6 || s.pagingBar.PageCount != 12 || !s.pagingBar.ShowRefresh {
+	if s.pagingBar == nil || s.pagingBar.Page().Get() != 6 || s.pagingBar.PageCount != 12 || !s.pagingBar.ShowRefresh {
 		t.Fatalf("pagingBar should be Page 6 of 12 with refresh, got %+v", s.pagingBar)
 	}
 	if s.gridEdit == nil || s.gridEdit.GroupBy != 0 || !s.gridEdit.Columns[1].Editable {
 		t.Fatal("gridEdit should be grouped by col 0 with an editable Owner column")
 	}
-	if s.dataView == nil || s.dataView.ItemRenderer == nil || s.dataView.Selected != 1 {
+	if s.dataView == nil || s.dataView.ItemRenderer == nil || s.dataView.Selected().Get() != 1 {
 		t.Fatal("dataView should have an ItemRenderer and a selected row")
 	}
 }
