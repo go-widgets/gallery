@@ -524,8 +524,8 @@ func TestWave5WidgetsPopulated(t *testing.T) {
 	if s.accordion == nil || len(s.accordion.Sections) != 3 || s.accordion.Expanded().Get() != 1 {
 		t.Fatal("accordion should have 3 sections with the second pre-expanded")
 	}
-	if s.colorPicker == nil || s.colorPicker.OnChange == nil {
-		t.Fatal("colorPicker should be populated with an OnChange handler")
+	if s.colorPicker == nil || s.colorPicker.Color().Get() != toolkit.RGB(0x35, 0x84, 0xe4) {
+		t.Fatal("colorPicker should be populated with its seeded colour")
 	}
 	if s.segBar == nil || s.segBar.Total() != 100 {
 		t.Fatalf("segBar segments should total 100, got %v", s.segBar.Total())

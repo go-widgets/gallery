@@ -637,7 +637,7 @@ func newState(w, _ int) *state {
 	s.accordion.Expanded().Set(1)
 
 	s.colorPicker = toolkit.NewColorPicker(toolkit.RGB(0x35, 0x84, 0xe4))
-	s.colorPicker.OnChange = func(c toolkit.RGBA) { s.showNotify("ColorPicker changed") }
+	s.colorPicker.Color().Subscribe(func(c toolkit.RGBA) { s.showNotify("ColorPicker changed") })
 
 	s.segBar = toolkit.NewSegmentedBar([]toolkit.BarSegment{
 		{Value: 62, Fill: toolkit.RGB(0x35, 0x84, 0xe4), Label: "used"},
