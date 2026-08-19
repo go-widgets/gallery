@@ -862,14 +862,14 @@ func TestKeyboardRouting(t *testing.T) {
 	if s.keyTarget != toolkit.Widget(s.entry) {
 		t.Fatal("clicking the entry did not focus it for keyboard")
 	}
-	before := s.entry.Text
+	before := s.entry.Text().Get()
 	s.handleChar("Z")
-	if s.entry.Text == before {
+	if s.entry.Text().Get() == before {
 		t.Fatal("handleChar did not edit the entry")
 	}
 	s.handleKeyDown("Backspace")
-	if s.entry.Text != before {
-		t.Fatalf("Backspace did not restore text: %q vs %q", s.entry.Text, before)
+	if s.entry.Text().Get() != before {
+		t.Fatalf("Backspace did not restore text: %q vs %q", s.entry.Text().Get(), before)
 	}
 	s.handleClick(1, surfaceH-toolkit.StatusbarH-2) // dead space
 	if s.keyTarget != nil {
