@@ -34,6 +34,14 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -o gallery.wasm .
 
+      - name: Build iso.wasm (interactive isometric editor)
+        env:
+          GOOS: js
+          GOARCH: wasm
+          GOWORK: "off"
+          CGO_ENABLED: "0"
+        run: go build -o iso.wasm ./iso
+
       - name: Copy wasm_exec.js from GOROOT
         run: |
           root="$(go env GOROOT)"
@@ -46,7 +54,7 @@ jobs:
       - name: Stage site
         run: |
           mkdir -p site
-          cp index.html gallery.wasm wasm_exec.js site/
+          cp index.html iso.html gallery.wasm iso.wasm wasm_exec.js site/
 
       - uses: actions/configure-pages@v5
 
