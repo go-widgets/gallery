@@ -39,6 +39,10 @@ func Run(screenID string, app App) {
 		ctx.Call("putImageData", imageData, 0, 0)
 	}
 	render()
+	// Signal the host page that the first frame is painted, so a loading
+	// placeholder can reveal the canvas. Purely additive — it changes no
+	// rendering, so every existing demo behaves exactly as before.
+	js.Global().Set("webcanvasReady", true)
 
 	// clientX/Y → canvas-local pixel coords via the bounding-rect, scaling for
 	// any CSS resize (the canvas keeps its intrinsic w*h while displayed at an
@@ -113,7 +117,7 @@ func Run(screenID string, app App) {
 		return nil
 	}))
 
-	// Optional animation clock: only scenes with time-varying state ask for it.
+	// Optional fixed-cadence clock: only scenes with time-varying state ask for it.
 	if t, ok := app.(Ticker); ok {
 		tick := js.FuncOf(func(_ js.Value, _ []js.Value) any {
 			t.Tick()
@@ -121,6 +125,24 @@ func Run(screenID string, app App) {
 			return nil
 		})
 		js.Global().Call("setInterval", tick, 16)
+	}
+
+	// Optional real-clock animation via requestAnimationFrame: hand the scene the
+	// true elapsed dt (seconds) between frames and repaint only when it reports a
+	// visible change, so an idle scene costs nothing beyond the rAF callback.
+	if a, ok := app.(Animator); ok {
+		var prevMS float64
+		var raf js.Func
+		raf = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			nowMS := args[0].Float()
+			if prevMS != 0 && a.AnimationStep((nowMS-prevMS)/1000) {
+				render()
+			}
+			prevMS = nowMS
+			js.Global().Call("requestAnimationFrame", raf)
+			return nil
+		})
+		js.Global().Call("requestAnimationFrame", raf)
 	}
 
 	// Park forever so the callbacks live.

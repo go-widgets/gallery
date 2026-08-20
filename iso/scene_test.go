@@ -17,6 +17,7 @@ import (
 	gfxcolor "github.com/go-gfx/gfx/color"
 	"github.com/go-gfx/gfx/iso"
 
+	"github.com/go-widgets/isoicons"
 	"github.com/go-widgets/toolkit"
 )
 
@@ -61,6 +62,61 @@ func renderDiagram(t *testing.T, d *toolkit.IsoDiagram) *image.RGBA {
 		t.Fatalf("RenderImage: %v", err)
 	}
 	return img
+}
+
+// nodeAtCell returns a copy of the node whose grid cell is (x,y), or nil.
+func nodeAtCell(doc toolkit.IsoDocument, x, y int) *toolkit.IsoNode {
+	for _, n := range doc.Nodes() {
+		if n.X == x && n.Y == y {
+			nn := n
+			return &nn
+		}
+	}
+	return nil
+}
+
+// idSet is the set of node ids currently in doc.
+func idSet(doc *toolkit.IsoCRDTDocument) map[string]bool {
+	m := map[string]bool{}
+	for _, n := range doc.Nodes() {
+		m[n.ID] = true
+	}
+	return m
+}
+
+// addedNode returns the single node present in doc but absent from before, or
+// nil — the node a drop just created.
+func addedNode(doc *toolkit.IsoCRDTDocument, before map[string]bool) *toolkit.IsoNode {
+	for _, n := range doc.Nodes() {
+		if !before[n.ID] {
+			nn := n
+			return &nn
+		}
+	}
+	return nil
+}
+
+// clickBtn fires the toolbar button registered under key by routing a real
+// Click+Release pair at its centre through the scene (surface click → group →
+// button), so the button's handler runs exactly as a user's tap would drive it.
+func clickBtn(s *isoScene, key string) {
+	b := s.btnByKey[key]
+	r := b.Bounds()
+	cx, cy := r.X+r.W/2, r.Y+r.H/2
+	s.Click(cx, cy)
+	s.Release(cx, cy)
+}
+
+// dropIcon arms icon in the palette, begins a palette gesture on the header (a
+// header press keeps the armed icon), releases over the canvas at absolute
+// (sx,sy), and returns the node the drop created on Site A.
+func dropIcon(s *isoScene, icon string, sx, sy int) *toolkit.IsoNode {
+	before := idSet(s.docA)
+	s.palette.SelectIcon(icon)
+	pb := s.palette.Bounds()
+	s.Click(pb.X+10, pb.Y+2)
+	s.Release(sx, sy)
+	return addedNode(s.docA, before)
 }
 
 // --- exact-position pixel proof -----------------------------------------
@@ -162,17 +218,6 @@ func TestPaletteDropPlacesNodeAtExactTileUndoable(t *testing.T) {
 	}
 }
 
-// nodeAtCell returns a copy of the node whose grid cell is (x,y), or nil.
-func nodeAtCell(doc toolkit.IsoDocument, x, y int) *toolkit.IsoNode {
-	for _, n := range doc.Nodes() {
-		if n.X == x && n.Y == y {
-			nn := n
-			return &nn
-		}
-	}
-	return nil
-}
-
 // --- CRDT convergence proof (identical snapshot AND identical pixels) ---
 
 // TestSeedReplicasStartIdentical checks both replicas begin byte-identical.
@@ -217,6 +262,145 @@ func TestConvergenceIdenticalPixel(t *testing.T) {
 	}
 }
 
+// --- animation proof (a phase step moves a pixel) -----------------------
+
+// TestAnimationStepMovesPixels proves the live-animation path: the seed scene
+// carries nodes with animated icons ("anim/*"), so a single AnimationStep both
+// reports a repaint is needed AND changes the rendered pixels (the rest frame at
+// phase 0 differs from the stepped frame). The phase-advance logic runs natively
+// here; the browser rAF loop that drives it is the only wasm-tagged code.
+func TestAnimationStepMovesPixels(t *testing.T) {
+	s := newIsoScene()
+	img0 := renderDiagram(t, s.diaA) // rest frame, phase 0
+
+	if !s.AnimationStep(0.5) {
+		t.Fatal("AnimationStep reported no repaint despite animated seed nodes")
+	}
+	img1 := renderDiagram(t, s.diaA) // stepped frame, phase != 0
+	if bytes.Equal(img0.Pix, img1.Pix) {
+		t.Fatal("animation advanced the phase but no pixel changed")
+	}
+}
+
+// --- view-rotation proof (re-maps the plane AND keeps hit-testing exact) -
+
+// TestRotationRemapsTileAndHitTestRoundTrips proves the view-rotation API on the
+// active canvas: a clockwise turn changes the rendered plane, re-maps the grid
+// tile under a FIXED screen pixel, and keeps hit-testing exact — a select-click
+// at that same pixel resolves the tile the rotated drop landed on.
+func TestRotationRemapsTileAndHitTestRoundTrips(t *testing.T) {
+	// A pixel well inside Site A, over empty ground away from the seed nodes.
+	px, py := isoPanelAX+330, isoDiaTop+430
+
+	// A clockwise turn changes the rendered plane. Prove it on THROWAWAY scenes:
+	// RenderPNG relocates the widget to the origin, so it must never touch a scene
+	// we then drive by absolute surface coordinates.
+	base := renderPanel(newIsoScene().diaA, toolkit.DefaultLight())
+	turned := renderPanel(rotatedScene().diaA, toolkit.DefaultLight())
+	if bytes.Equal(base, turned) {
+		t.Fatal("RotateCW did not change the rendered plane")
+	}
+
+	// Unrotated: which tile does the drop land on under (px,py)?
+	s0 := newIsoScene()
+	n0 := dropIcon(s0, "box", px, py)
+	if n0 == nil {
+		t.Fatal("unrotated drop placed no node")
+	}
+
+	// Rotated one quarter clockwise on the active canvas (not rendered, so its
+	// interactive bounds stay at the surface position).
+	s1 := newIsoScene()
+	s1.setActive(s1.diaA)
+	s1.diaA.RotateCW()
+	if s1.diaA.ViewRotation() != 1 {
+		t.Fatalf("RotateCW gave view rotation %d, want 1", s1.diaA.ViewRotation())
+	}
+	n1 := dropIcon(s1, "box", px, py)
+	if n1 == nil {
+		t.Fatal("rotated drop placed no node")
+	}
+	if n0.X == n1.X && n0.Y == n1.Y {
+		t.Fatalf("rotation did not remap the tile under a fixed pixel (both %d,%d)", n0.X, n0.Y)
+	}
+
+	// Hit-test round-trip on the rotated canvas: disarm placement, select-click
+	// the SAME pixel, and the selection must resolve to a node on the exact tile
+	// the rotated drop landed on.
+	s1.mode.Set(toolkit.IsoModeSelect)
+	s1.palette.SelectIcon("")
+	s1.Click(px, py)
+	sel := s1.diaA.Selected()
+	if sel == "" {
+		t.Fatal("select-click after rotation resolved no node")
+	}
+	selNode, _ := s1.docA.Node(sel)
+	if selNode.X != n1.X || selNode.Y != n1.Y {
+		t.Fatalf("rotated hit-test resolved tile (%d,%d), want (%d,%d)", selNode.X, selNode.Y, n1.X, n1.Y)
+	}
+}
+
+// TestRotationIsLocalPerCanvas proves the two canvases rotate independently: a
+// turn on Site A leaves Site B's view unrotated (rotation is LOCAL view state,
+// never in the shared document).
+func TestRotationIsLocalPerCanvas(t *testing.T) {
+	s := newIsoScene()
+	s.setActive(s.diaA)
+	clickBtn(s, "rotcw")
+	if s.diaA.ViewRotation() != 1 {
+		t.Fatalf("Site A view rotation = %d, want 1", s.diaA.ViewRotation())
+	}
+	if s.diaB.ViewRotation() != 0 {
+		t.Fatalf("Site B view rotation = %d, want 0 (rotation leaked across canvases)", s.diaB.ViewRotation())
+	}
+	// Turning Site A three more quarters wraps back to 0 via the observable.
+	clickBtn(s, "rotccw")
+	if s.diaA.ViewRotation() != 0 {
+		t.Fatalf("Site A view rotation after CCW = %d, want 0", s.diaA.ViewRotation())
+	}
+}
+
+// --- palette enrichment proof (anim + cloud-native + AWS all listed) ----
+
+// TestPaletteListsEnrichedIcons proves the palette lists, beyond the built-in
+// architecture icons, every animated icon and every cloud-native + AWS pack icon
+// the scene registered — grouped by pack.
+func TestPaletteListsEnrichedIcons(t *testing.T) {
+	s := newIsoScene()
+	listed := map[string]bool{}
+	for _, e := range s.palette.Entries() {
+		listed[e.ID] = true
+	}
+	check := func(kind string, ids []string) {
+		if len(ids) == 0 {
+			t.Fatalf("no %s ids to check — the pack is empty", kind)
+		}
+		for _, id := range ids {
+			if !listed[id] {
+				t.Errorf("palette does not list %s icon %q", kind, id)
+			}
+		}
+	}
+	check("animated", toolkit.IsoAnimatedIconIDs)
+	check("cloud-native", isoicons.CloudNativeIDs())
+	check("aws", isoicons.AWSIDs())
+
+	var haveAnim, haveCN, haveAWS bool
+	for _, g := range s.palette.Groups() {
+		switch g.Name {
+		case "anim":
+			haveAnim = true
+		case "cloudnative":
+			haveCN = true
+		case "aws":
+			haveAWS = true
+		}
+	}
+	if !haveAnim || !haveCN || !haveAWS {
+		t.Fatalf("palette groups missing a pack heading (anim=%v cloudnative=%v aws=%v)", haveAnim, haveCN, haveAWS)
+	}
+}
+
 // --- composite render + toolbar + routing coverage ----------------------
 
 // TestDrawPaintsComposite renders the whole workspace and checks that the
@@ -251,45 +435,46 @@ func TestDrawPaintsComposite(t *testing.T) {
 }
 
 // TestToolbarButtonsAllFire clicks every toolbar button through the real event
-// routing (surface click → HBox → Button → OnClick) and checks the observable
-// effect of each, so every handler closure runs.
+// routing (surface click → ButtonGroup → Button → OnClick) and checks the
+// observable effect of each, so every handler closure runs.
 func TestToolbarButtonsAllFire(t *testing.T) {
 	s := newIsoScene()
 
-	click := func(b *toolkit.Button) {
-		r := b.Bounds()
-		s.Click(r.X+r.W/2, r.Y+r.H/2)
-		s.Release(r.X+r.W/2, r.Y+r.H/2)
-	}
-	byLabel := map[string]*toolkit.Button{}
-	for _, b := range s.buttons {
-		byLabel[b.Label] = b
-	}
-
-	click(byLabel["Connect"])
+	clickBtn(s, "connect")
 	if s.diaA.Mode != toolkit.IsoModeConnect {
 		t.Fatal("Connect did not set connect mode")
 	}
-	click(byLabel["Zone"])
+	clickBtn(s, "zone")
 	if s.diaA.Mode != toolkit.IsoModeZone {
 		t.Fatal("Zone did not set zone mode")
 	}
-	click(byLabel["Text"])
+	clickBtn(s, "text")
 	if s.diaB.Mode != toolkit.IsoModeText {
 		t.Fatal("Text did not set text mode on replica B")
 	}
-	click(byLabel["Node"])
-	if s.palette.SelectedIcon().Get() != "server" {
-		t.Fatal("Node did not arm the server icon")
+	clickBtn(s, "node")
+	if s.palette.SelectedIcon().Get() != iconWeb {
+		t.Fatalf("Node armed %q, want %q", s.palette.SelectedIcon().Get(), iconWeb)
 	}
-	click(byLabel["Select"])
+	clickBtn(s, "select")
 	if s.diaA.Mode != toolkit.IsoModeSelect || s.palette.SelectedIcon().Get() != "" {
 		t.Fatal("Select did not reset to select mode with no armed icon")
 	}
 
+	// Rotate CW then CCW on the active canvas (Site A) returns to orientation 0.
+	s.setActive(s.diaA)
+	clickBtn(s, "rotcw")
+	if s.diaA.ViewRotation() != 1 {
+		t.Fatalf("Rot CW gave rotation %d, want 1", s.diaA.ViewRotation())
+	}
+	clickBtn(s, "rotccw")
+	if s.diaA.ViewRotation() != 0 {
+		t.Fatalf("Rot CCW gave rotation %d, want 0", s.diaA.ViewRotation())
+	}
+
 	// Layer toggle hides then shows the monitor layer on both replicas.
 	lA, _ := s.docA.Layer(layerMonitor)
-	click(byLabel["Layer"])
+	clickBtn(s, "layer")
 	lA2, _ := s.docA.Layer(layerMonitor)
 	lB2, _ := s.docB.Layer(layerMonitor)
 	if lA2.Visible == lA.Visible {
@@ -301,37 +486,38 @@ func TestToolbarButtonsAllFire(t *testing.T) {
 
 	// Zoom +/- change the projection scale (tile footprint).
 	before := s.diaA.Projection().TileW
-	click(byLabel["Zoom+"])
+	clickBtn(s, "zoomin")
 	if s.diaA.Projection().TileW <= before {
 		t.Fatal("Zoom+ did not increase the scale")
 	}
-	click(byLabel["Zoom-"])
+	clickBtn(s, "zoomout")
 
-	// Delete on a selection removes it; place a node first, select it, delete.
+	// Delete on a selection removes it; place a node first (the drop selects it),
+	// then delete.
 	s.diaA.OnEvent(toolkit.Event{Kind: toolkit.EventDrop, X: 60, Y: 60, Code: toolkit.EncodeIsoIconPayload("box")})
 	n := len(s.docA.Nodes())
 	s.setActive(s.diaA)
-	click(byLabel["Delete"])
+	clickBtn(s, "delete")
 	if len(s.docA.Nodes()) != n-1 {
 		t.Fatalf("Delete removed %d nodes, want 1", n-len(s.docA.Nodes()))
 	}
 
 	// Undo / Redo round-trip the delete.
-	click(byLabel["Undo"])
+	clickBtn(s, "undo")
 	if len(s.docA.Nodes()) != n {
 		t.Fatal("Undo did not restore the deleted node")
 	}
-	click(byLabel["Redo"])
+	clickBtn(s, "redo")
 	if len(s.docA.Nodes()) != n-1 {
 		t.Fatal("Redo did not re-apply the delete")
 	}
 
 	// Sync is a no-op-safe merge; just fire it.
-	click(byLabel["Sync"])
+	clickBtn(s, "sync")
 
 	// Reset returns to the seeded scene (default node count, select mode).
 	seeded := len(newIsoScene().docA.Nodes())
-	click(byLabel["Reset"])
+	clickBtn(s, "reset")
 	if len(s.docA.Nodes()) != seeded || s.diaA.Mode != toolkit.IsoModeSelect {
 		t.Fatalf("Reset did not restore the seed scene (%d nodes, mode %v)", len(s.docA.Nodes()), s.diaA.Mode)
 	}
@@ -419,6 +605,8 @@ func TestGeneratePNGs(t *testing.T) {
 		{"iso-editor.png", isoSurfaceW, isoSurfaceH},
 		{"converged-a.png", panelW, panelDrawH},
 		{"converged-b.png", panelW, panelDrawH},
+		{"anim-frame.png", panelW, panelDrawH},
+		{"rotated-a.png", panelW, panelDrawH},
 	}
 	if len(paths) != len(want) {
 		t.Fatalf("wrote %d files, want %d", len(paths), len(want))
