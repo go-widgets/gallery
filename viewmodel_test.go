@@ -93,13 +93,13 @@ func TestViewModelEventsListMirrors(t *testing.T) {
 func TestViewModelPaletteCommand(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	s.vm.paletteCmd.Execute()
-	if !s.cmdPalette.Visible {
+	if !s.cmdPalette.Visible().Get() {
 		t.Fatal("paletteCmd.Execute did not open the CommandPalette")
 	}
 	s.cmdPalette.Dismiss()
 	// The button's OnClick was rebound to the command by BindCommand.
 	s.paletteBtn.OnClick()
-	if !s.cmdPalette.Visible {
+	if !s.cmdPalette.Visible().Get() {
 		t.Fatal("paletteBtn.OnClick (bound to the Command) did not open the palette")
 	}
 }

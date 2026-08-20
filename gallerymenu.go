@@ -86,7 +86,7 @@ func (s *state) handleContext(x, y int) bool {
 		}
 	}
 	// Nothing editable under the cursor: dismiss any open menu.
-	wasOpen := s.ctxMenu.Open
+	wasOpen := s.ctxMenu.Open().Get()
 	s.ctxMenu.Close()
 	return wasOpen
 }
