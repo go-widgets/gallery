@@ -10,7 +10,22 @@
   .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px; text-align: center; }
   h1 { font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 6px; }
   .tagline { color: #9aa0b4; margin: 0 0 22px; }
-  #screen { display: block; margin: 0 auto; background: #ffffff; border: 1px solid #262c40; border-radius: 12px; max-width: 100%; height: auto; cursor: pointer; box-shadow: 0 12px 40px rgba(20,184,166,.15); }
+  /* The canvas lives inside a positioned stage so the loading placeholder can
+     overlay it exactly and be swapped out once the wasm has painted. */
+  .stage { position: relative; display: inline-block; max-width: 100%; }
+  #screen { display: block; margin: 0 auto; background: #ffffff; border: 1px solid #262c40; border-radius: 12px; max-width: 100%; height: auto; cursor: pointer; box-shadow: 0 12px 40px rgba(20,184,166,.15); opacity: 0; transition: opacity .25s; }
+  .stage.ready #screen { opacity: 1; }
+  /* Loading placeholder: a skeleton + a real progress bar driven by the streamed
+     wasm download; hidden once the app signals it is ready. */
+  #pg-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #0b0d12; border: 1px solid #262c40; border-radius: 12px; }
+  .stage.ready #pg-placeholder { display: none; }
+  .pg-skel { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 82%; height: 58%; }
+  .pg-skel > div { border: 1px solid #262c40; border-radius: 12px; background: linear-gradient(100deg,#12151f 30%,#1a2030 50%,#12151f 70%); background-size: 200% 100%; animation: pgshimmer 1.4s linear infinite; }
+  @keyframes pgshimmer { to { background-position: -200% 0; } }
+  .pg-load { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #9aa0b4; font-size: 13px; }
+  .pg-track { width: min(440px,60vw); height: 8px; border-radius: 6px; background: #1a2030; overflow: hidden; }
+  .pg-fill { height: 100%; width: 0; background: #14b8a6; transition: width .15s ease; }
+  #pg-pct { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
   /* "Full window" (NOT the OS Fullscreen API): a fixed overlay filling the
      browser viewport. The canvas keeps its aspect (width:100%, height:auto),
      so the uniform mouse mapping in the webcanvas harness stays exact. */
@@ -20,7 +35,8 @@
   #fsbtn { display: block; margin: 14px auto 0; padding: 8px 16px; background: #14b8a6; color: #04201c; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
   #fsbtn:hover { background: #12a394; }
   .hint { color: #9aa0b4; font-size: .9rem; margin: 14px auto 24px; max-width: 1000px; }
-  #err { color: #ff5f57; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; white-space: pre-wrap; }
+  #err { display: none; color: #ff5f57; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; white-space: pre-wrap; margin: 14px auto; max-width: 1000px; }
+  #err.show { display: block; }
   a { color: #14b8a6; }
   kbd { background:#1a2030; border:1px solid #2a3350; border-radius:4px; padding:0 4px; font-size:.85em; }
   footer { color: #9aa0b4; text-align: center; padding: 14px 0 40px; font-size: .85rem; }
@@ -30,9 +46,19 @@
   <div class="wrap">
     <h1>go-widgets — isometric diagram editor</h1>
     <p class="tagline">Live wasm demo of <a href="https://github.com/go-widgets/toolkit">go-widgets/toolkit</a>'s <code>IsoDiagram</code> + collaborative CRDT store.</p>
-    <canvas id="screen" width="1120" height="700"></canvas>
+    <div class="stage">
+      <canvas id="screen" width="1120" height="700"></canvas>
+      <div id="pg-placeholder">
+        <div class="pg-skel"><div></div><div></div></div>
+        <div class="pg-load">
+          <div id="pg-msg">Downloading the WebAssembly editor…</div>
+          <div class="pg-track"><div class="pg-fill" id="pg-fill"></div></div>
+          <div id="pg-pct">0%</div>
+        </div>
+      </div>
+    </div>
     <button id="fsbtn" type="button">⛶ Full window</button>
-    <p class="hint">A fully <strong>interactive</strong> isometric editor running entirely in your browser — no server. <strong>Drag</strong> an icon from the docked palette onto a canvas to drop a node at the exact ground tile; use the mode bar to <strong>Select</strong>, place a <strong>Node</strong>, <strong>Connect</strong> two nodes, draw a <strong>Zone</strong> or add <strong>Text</strong>; <strong>Undo</strong>/<strong>Redo</strong>/<strong>Delete</strong>; show/hide a <strong>Layer</strong>; <strong>Zoom</strong> in/out; left-drag empty ground to <strong>pan</strong>; <strong>right-click</strong> any element for its context menu. The two canvases are separate <strong>CRDT replicas</strong> (Site&nbsp;A / Site&nbsp;B): every edit auto-<strong>Sync</strong>s both ways, so a change in one appears in the other — live collaboration with no backend. Cross-boundary state flows through <a href="https://github.com/go-widgets/mvvm">go-widgets/mvvm</a> Observables. Press <strong>⛶ Full window</strong> (or double-click the canvas) to expand; <kbd>Esc</kbd> exits.</p>
+    <p class="hint">A fully <strong>interactive</strong> isometric editor running entirely in your browser — no server. <strong>Drag</strong> an icon from the docked palette (built-in, live <strong>animated</strong>, and cloud-native / AWS packs) onto a canvas to drop a node at the exact ground tile; use the toolbar to <strong>Select</strong>, place a <strong>Node</strong>, <strong>Connect</strong> two nodes, draw a <strong>Zone</strong> or add <strong>Text</strong>; <strong>Undo</strong>/<strong>Redo</strong>/<strong>Delete</strong>; rotate the view <strong>CCW</strong>/<strong>CW</strong>; <strong>Zoom</strong> in/out; show/hide a <strong>Layer</strong>; left-drag empty ground to <strong>pan</strong>; <strong>right-click</strong> any element for its context menu. The two canvases are separate <strong>CRDT replicas</strong> (Site&nbsp;A / Site&nbsp;B): every edit auto-<strong>Sync</strong>s both ways, so a change in one appears in the other — live collaboration with no backend, while the view rotation stays local to each canvas. Cross-boundary state flows through <a href="https://github.com/go-widgets/mvvm">go-widgets/mvvm</a> Observables. Press <strong>⛶ Full window</strong> (or double-click the canvas) to expand; <kbd>Esc</kbd> exits.</p>
     <div id="err"></div>
     <p><a href="./index.html">← back to the widget gallery</a> · <a href="https://github.com/go-widgets">go-widgets</a> · <a href="https://github.com/go-widgets/gallery">source</a></p>
   </div>
@@ -41,12 +67,14 @@
   <script>
     // "Full window" toggle — a fixed overlay filling the browser viewport, NOT
     // the OS Fullscreen API. The canvas element (and its 2D context) survive the
-    // DOM move, so rendering and click-mapping continue unbroken.
+    // DOM move, so rendering and click-mapping continue unbroken. By the time this
+    // is usable the loader has revealed the canvas, so only the canvas travels;
+    // its (hidden) placeholder stays behind in the stage and it returns there.
     (() => {
       const screen = document.getElementById("screen");
       const wrap = document.getElementById("fswrap");
       const btn = document.getElementById("fsbtn");
-      const home = screen.parentNode;
+      const home = screen.parentNode; // .stage — restore target
       const on = () => screen.classList.contains("maxi");
       const enter = () => {
         wrap.appendChild(screen);
@@ -54,7 +82,7 @@
         btn.textContent = "⤢ Exit full window";
       };
       const exit = () => {
-        home.insertBefore(screen, btn);
+        home.appendChild(screen); // back into its stage
         screen.classList.remove("maxi"); wrap.classList.remove("open");
         btn.textContent = "⛶ Full window";
       };
@@ -87,14 +115,79 @@
   </script>
   <script src="wasm_exec.js"></script>
   <script>
-    (async () => {
-      try {
-        const go = new Go();
-        const res = await WebAssembly.instantiateStreaming(fetch("iso.wasm"), go.importObject);
-        go.run(res.instance);
-      } catch (e) {
-        document.getElementById("err").textContent = "failed to boot the wasm: " + (e && e.message ? e.message : e);
+    "use strict";
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const stage = document.querySelector(".stage");
+      const errBox = $("err");
+      // The DECOMPRESSED wasm size, stamped at deploy time by pages.yml (which
+      // rewrites the __WASM__ token with `stat -c%s iso.wasm`). Pages serves the wasm
+      // gzip-compressed, but the stream reader below yields DECOMPRESSED bytes and
+      // Content-Length is the COMPRESSED length — so we drive the bar against this
+      // real total, or it would shoot past 100%. Falls back to Content-Length when
+      // the token was not substituted (a plain local open).
+      const wasmBytes = parseInt("__WASM_BYTES__", 10) || 0;
+
+      // setProgress drives the placeholder bar. frac in [0,1]; null = indeterminate.
+      function setProgress(frac) {
+        const fill = $("pg-fill"), pct = $("pg-pct");
+        if (!fill) return;
+        if (frac == null) { fill.style.width = "100%"; fill.style.opacity = "0.45"; pct.textContent = "…"; return; }
+        const p = Math.max(0, Math.min(100, Math.round(frac * 100)));
+        fill.style.opacity = "1"; fill.style.width = p + "%"; pct.textContent = p + "%";
       }
+
+      const go = new Go();
+      function boot(result) {
+        setProgress(1);
+        $("pg-msg").textContent = "Starting the editor…";
+        go.run(result.instance);
+        // webcanvas.Run paints the first frame synchronously during go.run and sets
+        // globalThis.webcanvasReady; poll for it, then reveal the canvas.
+        const t = setInterval(() => {
+          if (globalThis.webcanvasReady) { clearInterval(t); stage.classList.add("ready"); }
+        }, 30);
+      }
+      function fail(e) {
+        $("pg-msg").textContent = "The editor failed to load.";
+        const hint = location.protocol === "file:"
+          ? "\n(open this page over http:// — file:// blocks fetching the wasm.)"
+          : "\n(try a hard refresh — the wasm asset may be cached stale.)";
+        errBox.textContent = "Failed to load iso.wasm: " + String(e && e.message ? e.message : e) + hint;
+        errBox.classList.add("show");
+      }
+
+      // streamFetch downloads the wasm through a ReadableStream reader, updating the
+      // progress bar from the received / decompressed-total ratio, then verifies the
+      // wasm magic number and instantiates. It replaces instantiateStreaming so the
+      // multi-megabyte download shows real progress instead of a blank gap.
+      function streamFetch(url) {
+        return fetch(url, { cache: "reload" }).then((r) => {
+          if (!r.ok) throw new Error("HTTP " + r.status + " fetching " + url);
+          const total = wasmBytes || parseInt(r.headers.get("Content-Length") || "0", 10) || 0;
+          if (!r.body || !r.body.getReader) { return r.arrayBuffer(); } // no streaming: one shot
+          const reader = r.body.getReader(); let received = 0; const chunks = [];
+          return (function pump() {
+            return reader.read().then((res) => {
+              if (res.done) {
+                const buf = new Uint8Array(received); let pos = 0;
+                for (const c of chunks) { buf.set(c, pos); pos += c.length; }
+                return buf.buffer;
+              }
+              chunks.push(res.value); received += res.value.length;
+              setProgress(total ? received / total : null);
+              return pump();
+            });
+          })();
+        }).then((ab) => {
+          const m = new Uint8Array(ab, 0, 4);
+          if (!(m[0] === 0x00 && m[1] === 0x61 && m[2] === 0x73 && m[3] === 0x6d))
+            throw new Error("the URL did not return a WebAssembly module");
+          return WebAssembly.instantiate(ab, go.importObject);
+        });
+      }
+
+      streamFetch("iso.wasm").then(boot).catch(fail);
     })();
   </script>
 </body>

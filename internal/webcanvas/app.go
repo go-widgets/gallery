@@ -66,3 +66,18 @@ type Ticker interface {
 	// Tick advances one animation frame. Run repaints after every Tick.
 	Tick()
 }
+
+// Animator is an optional companion to [App]: a scene with time-varying content
+// driven by a REAL wall clock (procedurally animated icons, say) implements it,
+// and [Run] installs a requestAnimationFrame loop that hands it the elapsed dt
+// between frames — in seconds — through AnimationStep. Unlike [Ticker] (a fixed
+// cadence that always repaints), an Animator advances by the true frame delta and
+// reports whether the frame changed anything, so Run repaints only when a pixel
+// actually moved. A scene that implements neither installs no clock and repaints
+// on input alone. The phase-advance logic lives in the scene (natively testable);
+// only the rAF wiring is browser-side.
+type Animator interface {
+	// AnimationStep advances the scene's animation by dt seconds of real elapsed
+	// time and reports whether the scene now needs a repaint.
+	AnimationStep(dt float64) (repaint bool)
+}
