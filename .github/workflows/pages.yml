@@ -55,6 +55,16 @@ jobs:
         run: |
           mkdir -p site
           cp index.html iso.html gallery.wasm iso.wasm wasm_exec.js site/
+          # Stamp each page with its wasm's DECOMPRESSED size (the on-disk .wasm
+          # length). Pages serves the wasm gzip-compressed, so Content-Length is
+          # the compressed length while the browser's stream reader yields
+          # decompressed bytes — feeding this real total to the loader keeps its
+          # progress bar from overshooting 100%.
+          gbytes=$(stat -c%s site/gallery.wasm)
+          ibytes=$(stat -c%s site/iso.wasm)
+          sed -i "s/__WASM_BYTES__/${gbytes}/g" site/index.html
+          sed -i "s/__WASM_BYTES__/${ibytes}/g" site/iso.html
+          echo "stamped decompressed sizes: gallery.wasm=${gbytes} iso.wasm=${ibytes}"
 
       - uses: actions/configure-pages@v5
 
