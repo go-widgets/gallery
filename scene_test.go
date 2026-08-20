@@ -536,7 +536,7 @@ func TestWave5WidgetsPopulated(t *testing.T) {
 	if s.mdEditor == nil || s.mdEditor.Source == nil || s.mdEditor.Preview == nil {
 		t.Fatal("mdEditor should have both Source and Preview panes")
 	}
-	if s.dateRange == nil || s.dateRange.Start.D != 10 || s.dateRange.End.D != 17 {
+	if s.dateRange == nil || s.dateRange.Start().Get().D != 10 || s.dateRange.End().Get().D != 17 {
 		t.Fatal("dateRange should have Start=10 and End=17 preset")
 	}
 	if s.wizard == nil || len(s.wizard.Steps) != 3 {
