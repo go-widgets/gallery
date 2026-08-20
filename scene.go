@@ -1101,9 +1101,9 @@ func (s *state) draw(buf []byte) {
 	s.status.Draw(p, s.theme)
 
 	// Overlays.
-	if s.menuBar.Active >= 0 && s.menuBar.Active < len(s.menuBar.Menus) {
-		m := s.menuBar.Menus[s.menuBar.Active]
-		nx := s.menuBar.NameOriginX(s.menuBar.Active)
+	if active := s.menuBar.Active().Get(); active >= 0 && active < len(s.menuBar.Menus) {
+		m := s.menuBar.Menus[active]
+		nx := s.menuBar.NameOriginX(active)
 		m.SetBounds(toolkit.Rect{X: nx, Y: toolkit.MenuBarH, W: 160, H: 4 + toolkit.MenuRowH*len(m.Items)})
 		m.Draw(p, s.theme)
 	}
@@ -1135,7 +1135,7 @@ func (s *state) handleClick(x, y int) bool {
 
 	// Right-click edit menu is the topmost overlay: while open, every click is
 	// its concern (activate a row inside it, or dismiss on an outside click).
-	if s.ctxMenu.Open {
+	if s.ctxMenu.Open().Get() {
 		s.ctxMenu.OnEvent(ev)
 		return true
 	}
@@ -1143,22 +1143,22 @@ func (s *state) handleClick(x, y int) bool {
 	// CommandPalette overlay first: it floats above even the menu popover
 	// (see draw's z-order), and its own OnEvent already handles an
 	// outside-click as "dismiss" — so every click is its concern while open.
-	if s.cmdPalette.Visible {
+	if s.cmdPalette.Visible().Get() {
 		s.cmdPalette.OnEvent(ev)
 		return true
 	}
 
 	// Menu popover first: if one is open, prefer it.
-	if s.menuBar.Active >= 0 && s.menuBar.Active < len(s.menuBar.Menus) {
-		m := s.menuBar.Menus[s.menuBar.Active]
+	if active := s.menuBar.Active().Get(); active >= 0 && active < len(s.menuBar.Menus) {
+		m := s.menuBar.Menus[active]
 		r := m.Bounds()
 		if inside(x, y, r) {
 			m.OnEvent(toolkit.Event{Kind: ev.Kind, X: x - r.X, Y: y - r.Y})
-			s.menuBar.Active = -1
+			s.menuBar.Active().Set(-1)
 			return true
 		}
 		// Any click outside dismisses the popover.
-		s.menuBar.Active = -1
+		s.menuBar.Active().Set(-1)
 	}
 
 	// Open DropDown popover: the toolkit owns hit-testing via PopoverClick,

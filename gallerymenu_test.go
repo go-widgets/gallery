@@ -25,7 +25,7 @@ func TestContextMenuKanbanActions(t *testing.T) {
 
 	// Right-click "Design" (col 0, card 0) opens the menu.
 	x, y := kanbanCardPoint(s, 0, 0)
-	if !s.handleContext(x, y) || !s.ctxMenu.Open {
+	if !s.handleContext(x, y) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a card did not open the menu")
 	}
 	items := s.ctxMenu.Menu.Items
@@ -66,7 +66,7 @@ func TestContextMenuGanttActions(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	gr := s.gantt.Bounds()
 	rowY := gr.Y + toolkit.GanttHeaderH + 2 // task 0 "Design" Start 0 End 3
-	if !s.handleContext(gr.X+gr.W/2, rowY) || !s.ctxMenu.Open {
+	if !s.handleContext(gr.X+gr.W/2, rowY) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a task did not open the menu")
 	}
 	it := s.ctxMenu.Menu.Items
@@ -115,7 +115,7 @@ func TestContextMenuAgendaAdd(t *testing.T) {
 	x := ar.X + col*ar.W/7 + (ar.W/7)/2
 	yy := ar.Y + toolkit.AgendaHeaderH + row*toolkit.AgendaDayCellH + toolkit.AgendaDayCellH/2
 	before := len(s.agenda.Events)
-	if !s.handleContext(x, yy) || !s.ctxMenu.Open {
+	if !s.handleContext(x, yy) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a day did not open the menu")
 	}
 	s.ctxMenu.Menu.Items[0].Action() // Add event here
@@ -139,7 +139,7 @@ func TestContextMenuDismissAndRouting(t *testing.T) {
 	if !s.handleClick(mb.X+mb.W/2, mb.Y+toolkit.MenuRowH/2) {
 		t.Fatal("handleClick inside menu returned false")
 	}
-	if s.ctxMenu.Open {
+	if s.ctxMenu.Open().Get() {
 		t.Fatal("menu did not close after activating a row")
 	}
 
@@ -148,7 +148,7 @@ func TestContextMenuDismissAndRouting(t *testing.T) {
 	if !s.handleContext(surfaceW/2, toolkit.MenuBarH+2) { // empty scaffold area
 		t.Fatal("dismiss of an open menu should report a change")
 	}
-	if s.ctxMenu.Open {
+	if s.ctxMenu.Open().Get() {
 		t.Fatal("menu not dismissed by an empty-space right-click")
 	}
 	// Right-click empty space with no menu open is a no-op (false).
@@ -189,7 +189,7 @@ func TestContextMenuListActions(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	lr := s.listBox.Bounds()
 	// Right-click item 0 opens the menu.
-	if !s.handleContext(lr.X+5, lr.Y+2) || !s.ctxMenu.Open {
+	if !s.handleContext(lr.X+5, lr.Y+2) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a list item did not open the menu")
 	}
 
@@ -232,7 +232,7 @@ func TestContextMenuListActions(t *testing.T) {
 func TestContextMenuTableActions(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	tr := s.table.Bounds()
-	if !s.handleContext(tr.X+5, tr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open {
+	if !s.handleContext(tr.X+5, tr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a table row did not open the menu")
 	}
 
@@ -267,7 +267,7 @@ func TestContextMenuTableActions(t *testing.T) {
 func TestContextMenuTreeActions(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	tr := s.tree.Bounds()
-	if !s.handleContext(tr.X+40, tr.Y+2) || !s.ctxMenu.Open { // row 0 = Root
+	if !s.handleContext(tr.X+40, tr.Y+2) || !s.ctxMenu.Open().Get() { // row 0 = Root
 		t.Fatal("right-click on a tree node did not open the menu")
 	}
 
@@ -318,7 +318,7 @@ func TestContextMenuOtherInstances(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 
 	dr := s.dataView.Bounds()
-	if !s.handleContext(dr.X+5, dr.Y+2) || !s.ctxMenu.Open {
+	if !s.handleContext(dr.X+5, dr.Y+2) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on dataView (2nd ListBox) did not open a menu")
 	}
 	// Deleting through the menu mutates dataView, not listBox.
@@ -346,7 +346,7 @@ func TestContextMenuOtherInstances(t *testing.T) {
 	if !found {
 		t.Fatal("no data row found in gridEdit")
 	}
-	if !s.handleContext(gr.X+5, gy) || !s.ctxMenu.Open {
+	if !s.handleContext(gr.X+5, gy) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on gridEdit (2nd Table) did not open a menu")
 	}
 	gn := len(s.gridEdit.Rows)
@@ -359,7 +359,7 @@ func TestContextMenuOtherInstances(t *testing.T) {
 func TestContextMenuTreeTable(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	ttr := s.treeTable.Bounds()
-	if !s.handleContext(ttr.X+40, ttr.Y+toolkit.TreeTableHeaderHeight+2) || !s.ctxMenu.Open {
+	if !s.handleContext(ttr.X+40, ttr.Y+toolkit.TreeTableHeaderHeight+2) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a TreeTable node did not open a menu")
 	}
 
@@ -407,7 +407,7 @@ func TestContextMenuTreeTable(t *testing.T) {
 func TestContextMenuPropGrid(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	pr := s.propGrid.Bounds()
-	if !s.handleContext(pr.X+30, pr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open {
+	if !s.handleContext(pr.X+30, pr.Y+toolkit.TableHeaderHeight+2) || !s.ctxMenu.Open().Get() {
 		t.Fatal("right-click on a PropertyGrid row did not open a menu")
 	}
 	n := len(s.propGrid.Table().Rows)
