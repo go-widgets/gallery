@@ -458,10 +458,10 @@ func (s *isoScene) sync() {
 
 // refreshStatus rewrites the bottom status line from the live scene state.
 func (s *isoScene) refreshStatus() {
-	s.statusLabel.Text = fmt.Sprintf(
+	s.statusLabel.Text().Set(fmt.Sprintf(
 		"mode %s · active Site %s (view %d°) · A %d nodes / B %d nodes · armed icon %q — drag a palette icon onto a canvas to place a node; Rot CCW/CW turn the active view; left-drag empty ground pans; Sync merges the replicas",
 		modeName(s.mode.Get()), s.activeName(), s.active.ViewRotation()*90, len(s.docA.Nodes()), len(s.docB.Nodes()), s.palette.SelectedIcon().Get(),
-	)
+	))
 }
 
 // modeName is the human label for an edit mode.
