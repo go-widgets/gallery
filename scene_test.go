@@ -165,8 +165,8 @@ func TestDrawWithOpenMenuPopover(t *testing.T) {
 	if !s.handleClick(10, 6) {
 		t.Fatal("handleClick returned false")
 	}
-	if s.menuBar.Active != 0 {
-		t.Fatalf("MenuBar Active after File click: %d, want 0", s.menuBar.Active)
+	if s.menuBar.Active().Get() != 0 {
+		t.Fatalf("MenuBar Active after File click: %d, want 0", s.menuBar.Active().Get())
 	}
 	s.draw(newSurface()) // must not panic
 }
@@ -188,7 +188,7 @@ func TestHandleClickToolbarFiresNotification(t *testing.T) {
 func TestHandleClickMenuItemDismissesAndFires(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	s.handleClick(10, 6) // open File menu
-	if s.menuBar.Active != 0 {
+	if s.menuBar.Active().Get() != 0 {
 		t.Fatal("File menu did not open")
 	}
 	// draw() sets the popover's Bounds — run it once before hit-testing.
@@ -196,8 +196,8 @@ func TestHandleClickMenuItemDismissesAndFires(t *testing.T) {
 	menu := s.menuBar.Menus[0]
 	r := menu.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+4+toolkit.MenuRowH/2)
-	if s.menuBar.Active != -1 {
-		t.Fatalf("menu should dismiss after item click; Active=%d", s.menuBar.Active)
+	if s.menuBar.Active().Get() != -1 {
+		t.Fatalf("menu should dismiss after item click; Active=%d", s.menuBar.Active().Get())
 	}
 	if !s.notify.Visible {
 		t.Fatal("menu-item click should fire the item's Action → Notification")
@@ -208,13 +208,13 @@ func TestHandleClickOutsideOpenMenuDismisses(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	editX := s.menuBar.NameOriginX(1) + s.menuBar.NameWidth(1)/2
 	s.handleClick(editX, 6)
-	if s.menuBar.Active != 1 {
-		t.Fatalf("Edit menu did not open; Active=%d", s.menuBar.Active)
+	if s.menuBar.Active().Get() != 1 {
+		t.Fatalf("Edit menu did not open; Active=%d", s.menuBar.Active().Get())
 	}
 	// Click near the bottom-right of the canvas — well outside any menu.
 	s.handleClick(surfaceW-20, surfaceH-40)
-	if s.menuBar.Active != -1 {
-		t.Fatalf("outside click should dismiss menu; Active=%d", s.menuBar.Active)
+	if s.menuBar.Active().Get() != -1 {
+		t.Fatalf("outside click should dismiss menu; Active=%d", s.menuBar.Active().Get())
 	}
 }
 
@@ -548,7 +548,7 @@ func TestWave5WidgetsPopulated(t *testing.T) {
 	if s.paletteBtn == nil || s.cmdPalette == nil {
 		t.Fatal("paletteBtn + cmdPalette should be populated")
 	}
-	if s.cmdPalette.Visible {
+	if s.cmdPalette.Visible().Get() {
 		t.Fatal("cmdPalette should start hidden")
 	}
 	if len(s.cmdPalette.Commands) != 4 {
@@ -599,7 +599,7 @@ func TestClickPaletteButtonOpensCommandPalette(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.paletteBtn.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
-	if !s.cmdPalette.Visible {
+	if !s.cmdPalette.Visible().Get() {
 		t.Fatal("clicking the trigger button should open the CommandPalette")
 	}
 }
@@ -611,14 +611,14 @@ func TestClickPaletteButtonOpensCommandPalette(t *testing.T) {
 func TestHandleClickRoutesToOpenCommandPalette(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	s.cmdPalette.Open()
-	if !s.cmdPalette.Visible {
+	if !s.cmdPalette.Visible().Get() {
 		t.Fatal("Open() should set Visible")
 	}
 	// Top-left corner sits well outside the centered panel.
 	if !s.handleClick(1, 1) {
 		t.Fatal("handleClick should return true while the palette is open")
 	}
-	if s.cmdPalette.Visible {
+	if s.cmdPalette.Visible().Get() {
 		t.Fatal("an outside click should have dismissed the CommandPalette")
 	}
 }
