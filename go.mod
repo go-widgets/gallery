@@ -9,10 +9,13 @@ require (
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.8.0
 	github.com/go-widgets/painter v0.11.0
-	github.com/go-widgets/toolkit v0.220.0
+	github.com/go-widgets/toolkit v0.223.0
 )
 
 require (
+	github.com/andybalholm/brotli v1.2.2 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
+	github.com/go-crdt/collab v0.18.0 // indirect
 	github.com/go-images/images v0.0.0-20260811115337-bc5d586f8e38 // indirect
 	github.com/go-opentype/fonts v0.6.0 // indirect
 	github.com/go-opentype/opentype v0.5.0 // indirect
@@ -22,7 +25,10 @@ require (
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	golang.org/x/image v0.45.0 // indirect
-	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
+	google.golang.org/grpc v1.80.0 // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 )
