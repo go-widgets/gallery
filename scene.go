@@ -656,8 +656,8 @@ func newState(w, _ int) *state {
 	s.mdEditor = toolkit.NewMarkdownEditor("# Notes\n\n- live *preview*\n- side by side")
 
 	s.dateRange = toolkit.NewDateRangePicker(2026, 7)
-	s.dateRange.Start = toolkit.Date{Y: 2026, M: 7, D: 10}
-	s.dateRange.End = toolkit.Date{Y: 2026, M: 7, D: 17}
+	s.dateRange.Start().Set(toolkit.Date{Y: 2026, M: 7, D: 10})
+	s.dateRange.End().Set(toolkit.Date{Y: 2026, M: 7, D: 17})
 
 	// --- Column C extension: Wave 5 (v0.42) — construction only ---------
 	//
