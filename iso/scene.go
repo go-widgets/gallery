@@ -7,24 +7,36 @@
 // backing store ([toolkit.IsoCRDTDocument]). It is an INTERACTIVE editor you
 // drive in the page — not a static picture:
 //
-//   - a docked [toolkit.IsoIconPalette]: drag an icon onto a canvas and a node
-//     is created at the exact ground tile under the drop (undoable); picking an
-//     icon also arms click-to-place through an mvvm.Observable binding;
-//   - a mode toolbar: Select / place Node / Connect / Zone / Text, plus
-//     Undo / Redo / Delete, a layer show-hide toggle, Zoom +/- and a Sync
-//     button. Left-drag empty ground pans; right-click opens the widget's own
-//     context menu;
+//   - a docked [toolkit.IsoIconPalette] over a rich registry: the built-in
+//     architecture icons, the LIVE animated icons ("anim/*") and the vendored
+//     cloud-native + AWS packs (go-widgets/isoicons). Drag an icon onto a canvas
+//     and a node is created at the exact ground tile under the drop (undoable);
+//     picking an icon also arms click-to-place through an mvvm.Observable binding;
+//   - a real toolbar built from [toolkit.ButtonGroup]s of icon+label buttons
+//     (go-iconoir glyphs, themed): a Modes group (Select / Node / Connect / Zone /
+//     Text), an Edit group (Undo / Redo / Delete), a View group (RotateCCW /
+//     RotateCW / Zoom+ / Zoom- / Layer) and a Collaborate group (Sync / Reset).
+//     Left-drag empty ground pans; right-click opens the widget's own menu;
 //   - TWO canvases side by side ("Site A" / "Site B"), each backed by its own
 //     [toolkit.IsoCRDTDocument] on a distinct CRDT site. Every edit auto-syncs
 //     the two replicas (operations exchanged both ways via OpsSince/Apply), so
 //     an edit in one panel appears in the other, live, with no server — the
-//     collaborative showpiece.
+//     collaborative showpiece. The view rotation is LOCAL per canvas, so the two
+//     panels may face different orientations without diverging the shared model.
+//
+// The animated icons advance from a real clock: the shared internal/webcanvas
+// harness drives a requestAnimationFrame loop that hands the scene the elapsed
+// dt through [isoScene.AnimationStep], which the scene forwards to both diagrams'
+// [toolkit.IsoDiagram.AnimationStep]. The phase-advance logic is a pure function
+// of dt, so it is fully exercised natively (the browser rAF wiring is the only
+// `js && wasm` code, in run_js.go).
 //
 // All the scene logic lives here in a tag-less file, fully exercised by the
 // native scene_test.go (it renders to a buffer and asserts exact projected
-// pixel positions, drives a palette drop and a CRDT convergence). The only
-// `js && wasm` code is main.go, a one-line hand-off to the shared
-// internal/webcanvas harness, which drops out of the native build.
+// pixel positions, drives a palette drop and a CRDT convergence, steps the
+// animation and rotates the view). The only `js && wasm` code is main.go, a
+// one-line hand-off to the shared internal/webcanvas harness, which drops out of
+// the native build.
 package main
 
 import (
@@ -36,6 +48,8 @@ import (
 	"path/filepath"
 
 	"github.com/go-crdt/crdt"
+	"github.com/go-iconoir/iconoir"
+	"github.com/go-widgets/isoicons"
 	"github.com/go-widgets/mvvm"
 	"github.com/go-widgets/painter"
 	"github.com/go-widgets/toolkit"
@@ -50,8 +64,7 @@ const (
 )
 
 // Layout geometry (all in surface pixels). Two equal canvas columns sit right of
-// the docked palette, under the mode toolbar; a status line runs along the
-// bottom.
+// the docked palette, under the toolbar; a status line runs along the bottom.
 const (
 	isoToolbarH = 44
 	isoLabelH   = 20
@@ -73,6 +86,20 @@ const (
 	// standalone panel capture renders at).
 	panelDrawH = isoStatusY - isoDiaTop - 6 // 602
 	panelW     = isoPanelW
+)
+
+// Toolbar geometry. Uniform icon+label cells clustered into ButtonGroups laid
+// left-to-right with a small gap; each cell carries a go-iconoir glyph beside its
+// text label.
+const (
+	tbY        = 6
+	tbH        = isoToolbarH - 12 // 32
+	tbX0       = 6
+	tbBtnW     = 72 // one icon+label cell
+	tbGroupGap = 8  // gap between ButtonGroups
+	tbIconSz   = 16 // iconoir glyph square, device px
+	tbIconPad  = 6  // left inset of the glyph
+	tbTextPad  = 4  // gap between glyph and label
 )
 
 // CRDT sites for the two replicas.
@@ -108,6 +135,15 @@ var (
 	colZone  = toolkit.RGBA{R: 60, G: 120, B: 220, A: 70}
 )
 
+// Seed node icons. The web and db nodes carry ANIMATED icons ("anim/*"), so the
+// starting scene visibly breathes/blinks once the rAF clock drives it; the cache
+// node stays a still icon.
+const (
+	iconWeb   = "anim/server"
+	iconDB    = "anim/database"
+	iconCache = "storage"
+)
+
 // seedIso populates doc with the shared starting diagram every replica begins
 // from: two named layers, a grouping zone, three nodes across the two layers, a
 // connector and a floating annotation.
@@ -115,11 +151,34 @@ func seedIso(doc toolkit.IsoDocument) {
 	doc.PutLayer(toolkit.IsoLayer{ID: layerInfra, Name: "Infrastructure", Visible: true, Order: 0})
 	doc.PutLayer(toolkit.IsoLayer{ID: layerMonitor, Name: "Monitoring", Visible: true, Order: 1})
 	doc.PutZone(toolkit.IsoZone{ID: "z-core", X: 1, Y: 1, W: 5, H: 3, Color: colZone, Label: "Core", Layer: layerInfra})
-	doc.PutNode(toolkit.IsoNode{ID: nodeWeb, X: 2, Y: 2, Icon: "server", Color: colWeb, Label: "web", Layer: layerInfra})
-	doc.PutNode(toolkit.IsoNode{ID: nodeDB, X: 5, Y: 2, Icon: "database", Color: colDB, Label: "db", Layer: layerInfra})
-	doc.PutNode(toolkit.IsoNode{ID: nodeCache, X: 7, Y: 5, Icon: "storage", Color: colCache, Label: "cache", Layer: layerMonitor})
+	doc.PutNode(toolkit.IsoNode{ID: nodeWeb, X: 2, Y: 2, Icon: iconWeb, Color: colWeb, Label: "web", Layer: layerInfra})
+	doc.PutNode(toolkit.IsoNode{ID: nodeDB, X: 5, Y: 2, Icon: iconDB, Color: colDB, Label: "db", Layer: layerInfra})
+	doc.PutNode(toolkit.IsoNode{ID: nodeCache, X: 7, Y: 5, Icon: iconCache, Color: colCache, Label: "cache", Layer: layerMonitor})
 	doc.PutConnector(toolkit.IsoConnector{ID: "c-sql", From: nodeWeb, To: nodeDB, Arrow: toolkit.IsoArrowSingle, Label: "sql", Layer: layerInfra})
 	doc.PutText(toolkit.IsoText{ID: "t-region", X: 1, Y: 8, Text: "region: eu-west", Size: 1, Layer: layerMonitor})
+}
+
+// newIsoRegistry builds the icon registry both diagrams and the palette share: a
+// fresh registry seeded with the toolkit's built-in architecture icons, the
+// built-in animated icons ("anim/*") and the vendored cloud-native + AWS sprite
+// packs. It never mutates the package-global registry, so a native test observes
+// exactly this set. The pack loaders only fail on a corrupt vendored asset (they
+// are decoded from the isoicons module's own embed.FS and covered by its suite),
+// so the impossible error is discarded deliberately — matching the sync/Apply
+// reasoning below.
+func newIsoRegistry() *toolkit.IsoIconRegistry {
+	reg := toolkit.NewIsoIconRegistry()
+	// Copy the built-ins across (the constructor for a seeded registry is
+	// package-private in the toolkit; resolving each built-in id off the default
+	// registry gives the same icon without touching the global).
+	for _, id := range toolkit.IsoBuiltinIconIDs {
+		icon, _ := toolkit.IsoDefaultIcons().Resolve(id)
+		reg.Register(id, icon)
+	}
+	toolkit.RegisterAnimatedIcons(reg)
+	_ = isoicons.RegisterCloudNative(reg, isoicons.ThemeLight)
+	_ = isoicons.RegisterAWS(reg)
+	return reg
 }
 
 // isoTarget identifies which region captured the current pointer press, so a
@@ -134,20 +193,43 @@ const (
 	tgtDiaB
 )
 
-// isoScene is the whole demonstrator: the mode toolbar, the docked palette, the
-// two CRDT-backed diagram canvases and the status line, plus the pointer-capture
-// and sync bookkeeping that ties them together. It implements webcanvas.App
-// (Size/Draw/Click/Move/Release/Context/Char/KeyDown).
+// toolCmd is one toolbar cell: a stable key (for the test to fire it by name), a
+// go-iconoir glyph name, a text label and its click handler.
+type toolCmd struct {
+	key   string
+	icon  string
+	label string
+	fn    func()
+}
+
+// toolGroupSpec is one labelled cluster of toolbar cells rendered as a
+// [toolkit.ButtonGroup].
+type toolGroupSpec struct {
+	name string
+	cmds []toolCmd
+}
+
+// isoScene is the whole demonstrator: the toolbar, the docked palette, the two
+// CRDT-backed diagram canvases and the status line, plus the pointer-capture,
+// animation and sync bookkeeping that ties them together. It implements
+// webcanvas.App (Size/Draw/Click/Move/Release/Context/Char/KeyDown) and the
+// optional webcanvas.Animator (AnimationStep).
 type isoScene struct {
 	theme *toolkit.Theme
+
+	// reg is the icon registry shared by the palette and both diagrams, so an
+	// icon listed in the palette resolves and renders identically on the canvas.
+	reg *toolkit.IsoIconRegistry
 
 	// Shared cross-boundary state (MVVM): the active edit mode drives both
 	// diagrams; the palette's selected-icon observable is bound into both
 	// diagrams' placement observables so picking an icon arms click-to-place.
 	mode *mvvm.Observable[toolkit.IsoMode]
 
-	toolbar     *toolkit.HBox
-	buttons     []*toolkit.Button
+	groups   []*toolkit.ButtonGroup
+	btnByKey map[string]*toolkit.Button
+	tbGroup  *toolkit.ButtonGroup // the group holding the in-flight press, if any
+
 	palette     *toolkit.IsoIconPalette
 	labelA      *toolkit.Label
 	labelB      *toolkit.Label
@@ -161,19 +243,26 @@ type isoScene struct {
 	// sends only the operations produced since.
 	syncedA, syncedB crdt.CompositeVersion
 
+	// dirty is set by either diagram's OnInvalidate; AnimationStep clears it, steps
+	// both diagrams, and reports it so the rAF host repaints only when an animated
+	// icon actually advanced a pixel.
+	dirty bool
+
 	capture isoTarget
 	unbind  []func()
 }
 
 // newIsoScene builds the demonstrator with both replicas seeded to the same
-// starting diagram.
+// starting diagram over the shared enriched icon registry.
 func newIsoScene() *isoScene {
 	s := &isoScene{
-		theme: toolkit.DefaultLight(),
-		mode:  mvvm.NewObservable(toolkit.IsoModeSelect),
+		theme:    toolkit.DefaultLight(),
+		reg:      newIsoRegistry(),
+		mode:     mvvm.NewObservable(toolkit.IsoModeSelect),
+		btnByKey: map[string]*toolkit.Button{},
 	}
 
-	s.palette = toolkit.NewIsoIconPalette(toolkit.IsoDefaultIcons())
+	s.palette = toolkit.NewIsoIconPalette(s.reg)
 	s.palette.SetBounds(toolkit.Rect{X: isoPaletteX, Y: isoPanelTop, W: isoPaletteW, H: isoStatusY - isoPanelTop - 6})
 
 	s.labelA = toolkit.NewLabel("Site A — CRDT replica 1")
@@ -189,41 +278,78 @@ func newIsoScene() *isoScene {
 	return s
 }
 
-// buildToolbar assembles the mode / edit / view / collaborate button strip once;
-// its handlers read the live scene, so they keep working across a reset that
-// rebuilds the documents.
+// toolbarSpec is the toolbar's whole command layout: four logical ButtonGroups.
+// Handlers read the live scene, so they keep working across a reset that rebuilds
+// the documents.
+func (s *isoScene) toolbarSpec() []toolGroupSpec {
+	return []toolGroupSpec{
+		{name: "Modes", cmds: []toolCmd{
+			{"select", "cursor-pointer", "Select", func() { s.mode.Set(toolkit.IsoModeSelect); s.palette.SelectIcon(""); s.refreshStatus() }},
+			{"node", "plus-square", "Node", func() { s.mode.Set(toolkit.IsoModeSelect); s.palette.SelectIcon(iconWeb); s.refreshStatus() }},
+			{"connect", "link", "Connect", func() { s.mode.Set(toolkit.IsoModeConnect); s.refreshStatus() }},
+			{"zone", "frame", "Zone", func() { s.mode.Set(toolkit.IsoModeZone); s.refreshStatus() }},
+			{"text", "text", "Text", func() { s.mode.Set(toolkit.IsoModeText); s.refreshStatus() }},
+		}},
+		{name: "Edit", cmds: []toolCmd{
+			{"undo", "undo", "Undo", func() { s.active.Undo(); s.afterEdit() }},
+			{"redo", "redo", "Redo", func() { s.active.Redo(); s.afterEdit() }},
+			{"delete", "trash", "Delete", func() { s.active.DeleteSelection(); s.afterEdit() }},
+		}},
+		{name: "View", cmds: []toolCmd{
+			{"rotccw", "rotate-camera-left", "CCW", func() { s.active.RotateCCW(); s.refreshStatus() }},
+			{"rotcw", "rotate-camera-right", "CW", func() { s.active.RotateCW(); s.refreshStatus() }},
+			{"zoomin", "zoom-in", "Zoom+", func() { s.zoomActive(toolkit.IsoZoomStep) }},
+			{"zoomout", "zoom-out", "Zoom-", func() { s.zoomActive(1 / toolkit.IsoZoomStep) }},
+			{"layer", "multiple-pages", "Layer", func() { s.toggleLayer() }},
+		}},
+		{name: "Collab", cmds: []toolCmd{
+			{"sync", "refresh-double", "Sync", func() { s.sync(); s.refreshStatus() }},
+			{"reset", "restart", "Reset", func() { s.reset() }},
+		}},
+	}
+}
+
+// buildToolbar assembles the four ButtonGroups once. Each button carries a
+// go-iconoir glyph and its text label, drawn through the button's Icon seam so
+// the glyph tracks the pressed / disabled tint; ButtonGroup owns the shared
+// rounded chrome and inter-member dividers.
 func (s *isoScene) buildToolbar() {
-	type item struct {
-		label string
-		fn    func()
+	x := tbX0
+	for _, gs := range s.toolbarSpec() {
+		btns := make([]*toolkit.Button, 0, len(gs.cmds))
+		for _, c := range gs.cmds {
+			b := toolkit.NewButton(c.label, c.fn)
+			b.Icon = iconLabelPainter(c.icon, c.label)
+			s.btnByKey[c.key] = b
+			btns = append(btns, b)
+		}
+		g := toolkit.NewButtonGroup(btns...)
+		w := len(btns) * tbBtnW
+		g.SetBounds(toolkit.Rect{X: x, Y: tbY, W: w, H: tbH})
+		s.groups = append(s.groups, g)
+		x += w + tbGroupGap
 	}
-	items := []item{
-		{"Select", func() { s.mode.Set(toolkit.IsoModeSelect); s.palette.SelectIcon(""); s.refreshStatus() }},
-		{"Node", func() { s.mode.Set(toolkit.IsoModeSelect); s.palette.SelectIcon("server"); s.refreshStatus() }},
-		{"Connect", func() { s.mode.Set(toolkit.IsoModeConnect); s.refreshStatus() }},
-		{"Zone", func() { s.mode.Set(toolkit.IsoModeZone); s.refreshStatus() }},
-		{"Text", func() { s.mode.Set(toolkit.IsoModeText); s.refreshStatus() }},
-		{"Undo", func() { s.active.Undo(); s.afterEdit() }},
-		{"Redo", func() { s.active.Redo(); s.afterEdit() }},
-		{"Delete", func() { s.active.DeleteSelection(); s.afterEdit() }},
-		{"Layer", func() { s.toggleLayer() }},
-		{"Zoom+", func() { s.zoomActive(toolkit.IsoZoomStep) }},
-		{"Zoom-", func() { s.zoomActive(1 / toolkit.IsoZoomStep) }},
-		{"Sync", func() { s.sync(); s.refreshStatus() }},
-		{"Reset", func() { s.reset() }},
+}
+
+// iconLabelPainter returns a [toolkit.Button.Icon] closure that paints a
+// go-iconoir glyph in a small left square and the text label to its right, both
+// in the button's current ink (so they follow the pressed / disabled tint). The
+// glyph is fetched once at build time; its name is a compile-time constant proven
+// present in the vendored go-iconoir set.
+func iconLabelPainter(name, label string) func(p painter.Painter, r toolkit.Rect, ink toolkit.RGBA) {
+	ic := iconoir.MustGet(name)
+	return func(p painter.Painter, r toolkit.Rect, ink toolkit.RGBA) {
+		gy := r.Y + (r.H-tbIconSz)/2
+		iconoir.DrawIcon(p, toolkit.Rect{X: r.X + tbIconPad, Y: gy, W: tbIconSz, H: tbIconSz}, ic, ink)
+		lx := r.X + tbIconPad + tbIconSz + tbTextPad
+		ly := r.Y + (r.H-toolkit.GlyphHeight())/2
+		toolkit.DrawText(p, lx, ly, label, ink)
 	}
-	s.toolbar = toolkit.NewHBox()
-	for _, it := range items {
-		b := toolkit.NewButton(it.label, it.fn)
-		s.buttons = append(s.buttons, b)
-		s.toolbar.AddFixed(b, 80)
-	}
-	s.toolbar.SetBounds(toolkit.Rect{X: 6, Y: 6, W: isoSurfaceW - 12, H: isoToolbarH - 12})
 }
 
 // seedDocs (re)creates both replicas from one shared snapshot and rebinds the
-// mode / placement observers onto the fresh diagrams. It is the shared path for
-// startup and reset.
+// mode / placement / invalidate observers onto the fresh diagrams. It is the
+// shared path for startup and reset.
 func (s *isoScene) seedDocs() {
 	for _, u := range s.unbind {
 		u()
@@ -237,8 +363,12 @@ func (s *isoScene) seedDocs() {
 	s.docB, _ = toolkit.LoadIsoCRDTDocument(siteB, s.docA.Snapshot())
 
 	s.diaA = toolkit.NewIsoDiagram(s.docA)
+	s.diaA.Icons = s.reg
+	s.diaA.OnInvalidate = func() { s.dirty = true }
 	s.diaA.SetBounds(toolkit.Rect{X: isoPanelAX, Y: isoDiaTop, W: isoPanelW, H: panelDrawH})
 	s.diaB = toolkit.NewIsoDiagram(s.docB)
+	s.diaB.Icons = s.reg
+	s.diaB.OnInvalidate = func() { s.dirty = true }
 	s.diaB.SetBounds(toolkit.Rect{X: isoPanelBX, Y: isoDiaTop, W: isoPanelW, H: panelDrawH})
 	s.active = s.diaA
 	s.applyMode(s.mode.Get())
@@ -273,7 +403,7 @@ func (s *isoScene) reset() {
 }
 
 // setActive marks d (Site A or B) as the target of the toolbar's per-canvas
-// commands (undo, delete, zoom).
+// commands (undo, delete, zoom, rotate).
 func (s *isoScene) setActive(d *toolkit.IsoDiagram) { s.active = d }
 
 // activeName is "A" or "B" for the active canvas.
@@ -329,8 +459,8 @@ func (s *isoScene) sync() {
 // refreshStatus rewrites the bottom status line from the live scene state.
 func (s *isoScene) refreshStatus() {
 	s.statusLabel.Text = fmt.Sprintf(
-		"mode %s · active Site %s · A %d nodes / B %d nodes · armed icon %q — drag a palette icon onto a canvas to place a node; left-drag empty ground pans; right-click edits; Sync merges the replicas",
-		modeName(s.mode.Get()), s.activeName(), len(s.docA.Nodes()), len(s.docB.Nodes()), s.palette.SelectedIcon().Get(),
+		"mode %s · active Site %s (view %d°) · A %d nodes / B %d nodes · armed icon %q — drag a palette icon onto a canvas to place a node; Rot CCW/CW turn the active view; left-drag empty ground pans; Sync merges the replicas",
+		modeName(s.mode.Get()), s.activeName(), s.active.ViewRotation()*90, len(s.docA.Nodes()), len(s.docB.Nodes()), s.palette.SelectedIcon().Get(),
 	)
 }
 
@@ -353,13 +483,15 @@ func modeName(m toolkit.IsoMode) string {
 // Size reports the fixed surface dimensions.
 func (s *isoScene) Size() (int, int) { return isoSurfaceW, isoSurfaceH }
 
-// Draw paints the whole workspace: background, toolbar, canvas titles, the two
-// diagrams (each of which draws its own open context menu), the docked palette
-// and the status line.
+// Draw paints the whole workspace: background, toolbar groups, canvas titles, the
+// two diagrams (each of which draws its own open context menu), the docked
+// palette and the status line.
 func (s *isoScene) Draw(buf []byte) {
 	p := painter.NewPixelPainter(buf, isoSurfaceW, isoSurfaceH)
 	p.FillRect(toolkit.Rect{X: 0, Y: 0, W: isoSurfaceW, H: isoSurfaceH}, s.theme.Background)
-	s.toolbar.Draw(p, s.theme)
+	for _, g := range s.groups {
+		g.Draw(p, s.theme)
+	}
 	s.labelA.Draw(p, s.theme)
 	s.labelB.Draw(p, s.theme)
 	s.diaA.Draw(p, s.theme)
@@ -374,6 +506,16 @@ func local(w toolkit.Widget, kind toolkit.EventKind, x, y int) toolkit.Event {
 	return toolkit.Event{Kind: kind, X: x - b.X, Y: y - b.Y}
 }
 
+// groupAt returns the toolbar ButtonGroup under (x, y), if any.
+func (s *isoScene) groupAt(x, y int) (*toolkit.ButtonGroup, bool) {
+	for _, g := range s.groups {
+		if g.Bounds().Contains(x, y) {
+			return g, true
+		}
+	}
+	return nil, false
+}
+
 // diagramAt returns the canvas under (x, y), if any.
 func (s *isoScene) diagramAt(x, y int) (*toolkit.IsoDiagram, bool) {
 	if s.diaA.Bounds().Contains(x, y) {
@@ -385,15 +527,18 @@ func (s *isoScene) diagramAt(x, y int) (*toolkit.IsoDiagram, bool) {
 	return nil, false
 }
 
-// Click begins a gesture in whichever region holds (x, y): the toolbar fires a
-// button, the palette arms an icon / starts a panel move, a canvas starts a
-// diagram gesture (and becomes the active canvas).
+// Click begins a gesture in whichever region holds (x, y): a toolbar group fires
+// the button under the pointer, the palette arms an icon / starts a panel move, a
+// canvas starts a diagram gesture (and becomes the active canvas).
 func (s *isoScene) Click(x, y int) bool {
-	switch {
-	case s.toolbar.Bounds().Contains(x, y):
+	if g, ok := s.groupAt(x, y); ok {
 		s.capture = tgtToolbar
-		s.toolbar.OnEvent(local(s.toolbar, toolkit.EventClick, x, y))
+		s.tbGroup = g
+		g.OnEvent(local(g, toolkit.EventClick, x, y))
 		s.refreshStatus()
+		return true
+	}
+	switch {
 	case s.palette.Bounds().Contains(x, y):
 		s.capture = tgtPalette
 		s.palette.OnEvent(local(s.palette, toolkit.EventClick, x, y))
@@ -433,7 +578,7 @@ func (s *isoScene) Move(x, y int) bool {
 
 // Release commits the in-flight gesture. A palette release over a canvas with an
 // armed icon drops a node at the exact tile under the pointer (one undoable edit)
-// and syncs it to the peer.
+// and syncs it to the peer; a toolbar release clears the pressed member's face.
 func (s *isoScene) Release(x, y int) bool {
 	switch s.capture {
 	case tgtDiaA:
@@ -453,7 +598,10 @@ func (s *isoScene) Release(x, y int) bool {
 			}
 		}
 	case tgtToolbar:
-		s.toolbar.OnEvent(local(s.toolbar, toolkit.EventMouseUp, x, y))
+		if s.tbGroup != nil {
+			s.tbGroup.OnEvent(local(s.tbGroup, toolkit.EventMouseUp, x, y))
+			s.tbGroup = nil
+		}
 	}
 	s.capture = tgtNone
 	return true
@@ -479,6 +627,21 @@ func (s *isoScene) KeyDown(code string) bool {
 	s.active.OnEvent(toolkit.Event{Kind: toolkit.EventKeyDown, Code: code})
 	s.afterEdit()
 	return true
+}
+
+// --- webcanvas.Animator -------------------------------------------------
+
+// AnimationStep advances both diagrams' animation phase by dt (real elapsed
+// seconds from the host's requestAnimationFrame clock) and reports whether either
+// canvas actually needs a repaint — true exactly when a canvas holds a node
+// carrying an animated icon, since only then does a phase change move a pixel.
+// The phase-advance logic is a pure function of dt, so this method is exercised
+// natively; the browser rAF loop that calls it is the only wasm-tagged code.
+func (s *isoScene) AnimationStep(dt float64) bool {
+	s.dirty = false
+	s.diaA.AnimationStep(dt)
+	s.diaB.AnimationStep(dt)
+	return s.dirty
 }
 
 // --- PNG capture (inspectable artifacts) --------------------------------
@@ -513,6 +676,30 @@ func convergedScene() *isoScene {
 	return s
 }
 
+// animatedScene returns a fresh scene whose active canvas has been stepped to a
+// mid-cycle animation phase, so its captured frame differs visibly from the rest
+// frame. It is the animation proof, reused by the capture set.
+func animatedScene() *isoScene {
+	s := newIsoScene()
+	// Pin an explicit one-second cycle on both canvases, then step half of it, so
+	// the phase lands at 0.5 — the peak of the blink / breathe / bob curves —
+	// independent of the toolkit's internal default period.
+	s.diaA.AnimationPeriod = 1
+	s.diaB.AnimationPeriod = 1
+	s.AnimationStep(0.5)
+	return s
+}
+
+// rotatedScene returns a fresh scene whose active canvas (Site A) has been turned
+// one quarter-turn clockwise, so its captured frame shows the re-oriented plane.
+// It is the view-rotation proof, reused by the capture set.
+func rotatedScene() *isoScene {
+	s := newIsoScene()
+	s.setActive(s.diaA)
+	s.diaA.RotateCW()
+	return s
+}
+
 // renderPanel captures one diagram canvas at panel size. panelW/panelDrawH are
 // positive, so RenderPNG cannot fail; its error is discarded.
 func renderPanel(d *toolkit.IsoDiagram, theme *toolkit.Theme) []byte {
@@ -527,14 +714,19 @@ type isoCapture struct {
 }
 
 // isoCaptures builds the demonstrator's showcase images in a stable order: the
-// full editor, then the two converged replica canvases (identical bytes).
+// full enriched editor, the two converged replica canvases (identical bytes), one
+// mid-cycle animation frame and one clockwise-rotated view.
 func isoCaptures() []isoCapture {
 	editor := newIsoScene()
 	conv := convergedScene()
+	anim := animatedScene()
+	rot := rotatedScene()
 	return []isoCapture{
 		{"iso-editor.png", editor.encodePNG()},
 		{"converged-a.png", renderPanel(conv.diaA, conv.theme)},
 		{"converged-b.png", renderPanel(conv.diaB, conv.theme)},
+		{"anim-frame.png", renderPanel(anim.diaA, anim.theme)},
+		{"rotated-a.png", renderPanel(rot.diaA, rot.theme)},
 	}
 }
 
