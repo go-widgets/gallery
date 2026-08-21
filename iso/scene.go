@@ -43,11 +43,16 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	stdcolor "image/color"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/go-crdt/crdt"
+	"github.com/go-gfx/gfx/geometry"
+	"github.com/go-gfx/gfx/iso"
+	"github.com/go-gfx/gfx/raster"
 	"github.com/go-iconoir/iconoir"
 	"github.com/go-widgets/isoicons"
 	"github.com/go-widgets/mvvm"
@@ -55,12 +60,20 @@ import (
 	"github.com/go-widgets/toolkit"
 )
 
-// Surface dimensions. Fixed (unlike the gallery, whose height is content-driven)
-// because the editor is a bounded two-canvas workspace, not a scrolling
-// dashboard.
+// Surface dimensions. These are the DEFAULT (and the standalone-capture) size:
+// the scene opens at them, and the showcase PNGs render at them. In the browser
+// the scene is a [webcanvas.Resizer], so the live surface tracks the viewport
+// (see [isoScene.Resize]) — the two canvases stretch to fill the window — while
+// the fixed defaults keep the native capture set byte-stable.
 const (
 	isoSurfaceW = 1120
 	isoSurfaceH = 700
+
+	// isoMinSurfaceW / isoMinSurfaceH floor the resizable surface so the two
+	// canvases (and the status line) always keep a workable, positive size however
+	// small the window is dragged.
+	isoMinSurfaceW = 640
+	isoMinSurfaceH = 400
 )
 
 // Layout geometry (all in surface pixels). Two equal canvas columns sit right of
@@ -217,6 +230,12 @@ type toolGroupSpec struct {
 type isoScene struct {
 	theme *toolkit.Theme
 
+	// w, h are the CURRENT surface size in pixels. They start at the fixed
+	// defaults (isoSurfaceW × isoSurfaceH) and, in the browser, follow the viewport
+	// through [isoScene.Resize]; every widget bound is derived from them so a
+	// resize relayouts the whole workspace.
+	w, h int
+
 	// reg is the icon registry shared by the palette and both diagrams, so an
 	// icon listed in the palette resolves and renders identically on the canvas.
 	reg *toolkit.IsoIconRegistry
@@ -225,6 +244,13 @@ type isoScene struct {
 	// diagrams; the palette's selected-icon observable is bound into both
 	// diagrams' placement observables so picking an icon arms click-to-place.
 	mode *mvvm.Observable[toolkit.IsoMode]
+
+	// ghost is the drag/placement preview state (the icon in hand + the pointer
+	// position it follows), held in ONE mvvm.Observable so the cross-boundary
+	// preview is observed, not polled. It arms when a palette icon is grabbed or an
+	// icon is armed for click-to-place, follows the cursor, and clears on drop or
+	// cancel — the "you picked it up" feedback drawn translucent under the pointer.
+	ghost *mvvm.Observable[isoGhost]
 
 	groups   []*toolkit.ButtonGroup
 	btnByKey map[string]*toolkit.Button
@@ -257,25 +283,96 @@ type isoScene struct {
 func newIsoScene() *isoScene {
 	s := &isoScene{
 		theme:    toolkit.DefaultLight(),
+		w:        isoSurfaceW,
+		h:        isoSurfaceH,
 		reg:      newIsoRegistry(),
 		mode:     mvvm.NewObservable(toolkit.IsoModeSelect),
+		ghost:    mvvm.NewObservable(isoGhost{}),
 		btnByKey: map[string]*toolkit.Button{},
 	}
 
+	// The palette and the two canvas titles are created here; every bound (theirs,
+	// the status line's and both canvases') is assigned from the surface size by
+	// relayout, called at the end of seedDocs once the diagrams exist.
 	s.palette = toolkit.NewIsoIconPalette(s.reg)
-	s.palette.SetBounds(toolkit.Rect{X: isoPaletteX, Y: isoPanelTop, W: isoPaletteW, H: isoStatusY - isoPanelTop - 6})
-
 	s.labelA = toolkit.NewLabel("Site A — CRDT replica 1")
-	s.labelA.SetBounds(toolkit.Rect{X: isoPanelAX, Y: isoPanelTop, W: isoPanelW, H: isoLabelH})
 	s.labelB = toolkit.NewLabel("Site B — CRDT replica 2")
-	s.labelB.SetBounds(toolkit.Rect{X: isoPanelBX, Y: isoPanelTop, W: isoPanelW, H: isoLabelH})
-
 	s.statusLabel = toolkit.NewLabel("")
-	s.statusLabel.SetBounds(toolkit.Rect{X: isoPaletteX, Y: isoStatusY, W: isoSurfaceW - 2*isoGap, H: isoStatusH})
 
 	s.buildToolbar()
 	s.seedDocs()
 	return s
+}
+
+// isoGhost is the drag/placement preview: the id of the icon currently in hand and
+// the surface pixel the pointer sits at (the ghost's centre). Active is false when
+// nothing is in hand. It is a comparable value so the whole preview rides in one
+// mvvm.Observable.
+type isoGhost struct {
+	Icon   string
+	X, Y   int
+	Active bool
+}
+
+// isoRects is the whole workspace geometry for one surface size: where the docked
+// palette, the two canvas titles, the two canvases and the status line sit. Every
+// bound the scene assigns comes from here, so a resize relayouts by recomputing
+// this single value.
+type isoRects struct {
+	palette, labelA, labelB, status, diaA, diaB toolkit.Rect
+}
+
+// computeLayout derives the workspace geometry from the current surface size: a
+// fixed-width palette at the left, the two equal canvas columns filling the rest
+// of the width, the titles above them and the status line along the bottom. At the
+// default 1120×700 it reproduces the original fixed layout exactly.
+func (s *isoScene) computeLayout() isoRects {
+	gap := isoGap
+	panelTop := isoToolbarH + 4
+	diaTop := panelTop + isoLabelH + 2
+	statusY := s.h - isoStatusH - 4
+	panelAX := isoPaletteX + isoPaletteW + gap
+	panelW := (s.w - panelAX - 2*gap) / 2
+	panelBX := panelAX + panelW + gap
+	panelDrawH := statusY - diaTop - 6
+	return isoRects{
+		palette: toolkit.Rect{X: isoPaletteX, Y: panelTop, W: isoPaletteW, H: statusY - panelTop - 6},
+		labelA:  toolkit.Rect{X: panelAX, Y: panelTop, W: panelW, H: isoLabelH},
+		labelB:  toolkit.Rect{X: panelBX, Y: panelTop, W: panelW, H: isoLabelH},
+		status:  toolkit.Rect{X: isoPaletteX, Y: statusY, W: s.w - 2*gap, H: isoStatusH},
+		diaA:    toolkit.Rect{X: panelAX, Y: diaTop, W: panelW, H: panelDrawH},
+		diaB:    toolkit.Rect{X: panelBX, Y: diaTop, W: panelW, H: panelDrawH},
+	}
+}
+
+// relayout assigns every widget its bound from the current surface size. It runs
+// at build time and on every resize; the diagrams always exist by the time it is
+// called (seedDocs creates them, then calls this).
+func (s *isoScene) relayout() {
+	r := s.computeLayout()
+	s.palette.SetBounds(r.palette)
+	s.labelA.SetBounds(r.labelA)
+	s.labelB.SetBounds(r.labelB)
+	s.statusLabel.SetBounds(r.status)
+	s.diaA.SetBounds(r.diaA)
+	s.diaB.SetBounds(r.diaB)
+}
+
+// Resize is the [webcanvas.Resizer] hook: it floors the requested size to the
+// minimum workable surface, relayouts the whole workspace to fit, and returns the
+// size it will render at (the size the host sizes the canvas and framebuffer to).
+// The browser calls it with the viewport box, so the editor opens and stays full
+// page and the two canvases stretch to fill the window.
+func (s *isoScene) Resize(w, h int) (int, int) {
+	if w < isoMinSurfaceW {
+		w = isoMinSurfaceW
+	}
+	if h < isoMinSurfaceH {
+		h = isoMinSurfaceH
+	}
+	s.w, s.h = w, h
+	s.relayout()
+	return s.w, s.h
 }
 
 // toolbarSpec is the toolbar's whole command layout: four logical ButtonGroups.
@@ -365,21 +462,26 @@ func (s *isoScene) seedDocs() {
 	s.diaA = toolkit.NewIsoDiagram(s.docA)
 	s.diaA.Icons = s.reg
 	s.diaA.OnInvalidate = func() { s.dirty = true }
-	s.diaA.SetBounds(toolkit.Rect{X: isoPanelAX, Y: isoDiaTop, W: isoPanelW, H: panelDrawH})
 	s.diaB = toolkit.NewIsoDiagram(s.docB)
 	s.diaB.Icons = s.reg
 	s.diaB.OnInvalidate = func() { s.dirty = true }
-	s.diaB.SetBounds(toolkit.Rect{X: isoPanelBX, Y: isoDiaTop, W: isoPanelW, H: panelDrawH})
 	s.active = s.diaA
 	s.applyMode(s.mode.Get())
+	// Now that both diagrams exist, lay the whole workspace out for the current
+	// surface size (positions the palette, titles, status line and both canvases).
+	s.relayout()
 
 	// MVVM wiring: the mode observable drives both diagrams' edit mode, and the
 	// palette's selected-icon observable is bound into both diagrams' placement
-	// observables (picking an icon arms click-to-place on either canvas).
+	// observables (picking an icon arms click-to-place on either canvas). Disarming
+	// (id "") also clears any in-flight ghost preview.
 	s.unbind = append(s.unbind, s.mode.Subscribe(func(m toolkit.IsoMode) { s.applyMode(m) }))
 	s.unbind = append(s.unbind, s.palette.SelectedIcon().Subscribe(func(id string) {
 		s.diaA.PlacementIconObservable().Set(id)
 		s.diaB.PlacementIconObservable().Set(id)
+		if id == "" {
+			s.clearGhost()
+		}
 	}))
 	s.diaA.PlacementIconObservable().Set(s.palette.SelectedIcon().Get())
 	s.diaB.PlacementIconObservable().Set(s.palette.SelectedIcon().Get())
@@ -480,15 +582,16 @@ func modeName(m toolkit.IsoMode) string {
 
 // --- webcanvas.App ------------------------------------------------------
 
-// Size reports the fixed surface dimensions.
-func (s *isoScene) Size() (int, int) { return isoSurfaceW, isoSurfaceH }
+// Size reports the current surface dimensions (the defaults until a resize).
+func (s *isoScene) Size() (int, int) { return s.w, s.h }
 
 // Draw paints the whole workspace: background, toolbar groups, canvas titles, the
 // two diagrams (each of which draws its own open context menu), the docked
-// palette and the status line.
+// palette, the status line and — on top of everything — the translucent drag
+// ghost following the pointer while an icon is in hand.
 func (s *isoScene) Draw(buf []byte) {
-	p := painter.NewPixelPainter(buf, isoSurfaceW, isoSurfaceH)
-	p.FillRect(toolkit.Rect{X: 0, Y: 0, W: isoSurfaceW, H: isoSurfaceH}, s.theme.Background)
+	p := painter.NewPixelPainter(buf, s.w, s.h)
+	p.FillRect(toolkit.Rect{X: 0, Y: 0, W: s.w, H: s.h}, s.theme.Background)
 	for _, g := range s.groups {
 		g.Draw(p, s.theme)
 	}
@@ -498,6 +601,7 @@ func (s *isoScene) Draw(buf []byte) {
 	s.diaB.Draw(p, s.theme)
 	s.palette.Draw(p, s.theme)
 	s.statusLabel.Draw(p, s.theme)
+	s.drawGhost(buf)
 }
 
 // local translates a surface event into w's local coordinate frame.
@@ -542,6 +646,9 @@ func (s *isoScene) Click(x, y int) bool {
 	case s.palette.Bounds().Contains(x, y):
 		s.capture = tgtPalette
 		s.palette.OnEvent(local(s.palette, toolkit.EventClick, x, y))
+		// A press that armed an icon shows the ghost immediately under the pointer,
+		// so the grab reads as "picked up" the instant it registers.
+		s.updateGhost(x, y)
 		s.refreshStatus()
 	case s.diaA.Bounds().Contains(x, y):
 		s.capture = tgtDiaA
@@ -561,8 +668,12 @@ func (s *isoScene) Click(x, y int) bool {
 }
 
 // Move advances the in-flight gesture on the captured widget (a diagram drag /
-// pan, or a palette panel move); with nothing captured it is an inert hover.
+// pan, or a palette panel move) and, whenever an icon is in hand, slides the drag
+// ghost to the pointer. With nothing captured it is a hover that still repaints
+// when the ghost moved (so the preview tracks the cursor across the canvas), and
+// is otherwise inert.
 func (s *isoScene) Move(x, y int) bool {
+	ghostMoved := s.updateGhost(x, y)
 	switch s.capture {
 	case tgtDiaA:
 		s.diaA.OnEvent(local(s.diaA, toolkit.EventMouseDrag, x, y))
@@ -571,7 +682,7 @@ func (s *isoScene) Move(x, y int) bool {
 	case tgtPalette:
 		s.palette.OnEvent(local(s.palette, toolkit.EventMouseDrag, x, y))
 	default:
-		return false
+		return ghostMoved
 	}
 	return true
 }
@@ -584,9 +695,11 @@ func (s *isoScene) Release(x, y int) bool {
 	case tgtDiaA:
 		s.diaA.OnEvent(local(s.diaA, toolkit.EventMouseUp, x, y))
 		s.afterEdit()
+		s.clearGhost() // a click-to-place tap dropped the node (or a plain gesture ended)
 	case tgtDiaB:
 		s.diaB.OnEvent(local(s.diaB, toolkit.EventMouseUp, x, y))
 		s.afterEdit()
+		s.clearGhost()
 	case tgtPalette:
 		s.palette.OnEvent(local(s.palette, toolkit.EventMouseUp, x, y))
 		if payload := s.palette.DragData(); payload != "" {
@@ -597,6 +710,7 @@ func (s *isoScene) Release(x, y int) bool {
 				s.afterEdit()
 			}
 		}
+		s.clearGhost() // the drag ended: dropped on a canvas, or cancelled off it
 	case tgtToolbar:
 		if s.tbGroup != nil {
 			s.tbGroup.OnEvent(local(s.tbGroup, toolkit.EventMouseUp, x, y))
@@ -621,12 +735,178 @@ func (s *isoScene) Context(x, y int) bool {
 // toolbar rather than typing, so there is nothing to type into.
 func (s *isoScene) Char(string) bool { return false }
 
-// KeyDown forwards a named key to the active canvas (Delete removes the
-// selection) and syncs any resulting edit to the peer.
+// KeyDown routes a named key. Escape cancels an in-flight placement — it disarms
+// the palette (which clears the ghost via the selected-icon binding) so a mistaken
+// grab is dropped without placing anything. Every other key forwards to the active
+// canvas (Delete removes the selection) and syncs any resulting edit to the peer.
 func (s *isoScene) KeyDown(code string) bool {
+	if code == "Escape" {
+		s.palette.SelectIcon("")
+		s.clearGhost()
+		s.refreshStatus()
+		return true
+	}
 	s.active.OnEvent(toolkit.Event{Kind: toolkit.EventKeyDown, Code: code})
 	s.afterEdit()
 	return true
+}
+
+// --- drag / placement ghost ---------------------------------------------
+
+// isoGhostSize is the ghost preview's square side in device pixels; isoGhostOpacity
+// is the translucency it is blitted at (0..255).
+const (
+	isoGhostSize    = 56
+	isoGhostOpacity = 150
+)
+
+// updateGhost slides the ghost to the pointer while an icon is armed, reporting
+// whether the preview changed (so a hover repaints to track the cursor). With
+// nothing armed it does nothing — disarming clears the ghost through the palette
+// binding, not here.
+func (s *isoScene) updateGhost(x, y int) bool {
+	armed := s.palette.SelectedIcon().Get()
+	if armed == "" {
+		return false
+	}
+	next := isoGhost{Icon: armed, X: x, Y: y, Active: true}
+	if s.ghost.Get() == next {
+		return false
+	}
+	s.ghost.Set(next)
+	return true
+}
+
+// clearGhost hides the ghost (a drop landed, or the grab was cancelled), reporting
+// whether it had been showing.
+func (s *isoScene) clearGhost() bool {
+	if !s.ghost.Get().Active {
+		return false
+	}
+	s.ghost.Set(isoGhost{})
+	return true
+}
+
+// ghostBase is the base colour the ghost icon is shaded from — the theme accent,
+// the same default an un-coloured node uses.
+func (s *isoScene) ghostBase() stdcolor.RGBA {
+	c := s.theme.Accent
+	return stdcolor.RGBA{R: c.R, G: c.G, B: c.B, A: c.A}
+}
+
+// drawGhost composites the translucent icon preview over the finished frame at the
+// pointer, when an icon is in hand. It draws last so the ghost floats above every
+// widget.
+func (s *isoScene) drawGhost(buf []byte) {
+	g := s.ghost.Get()
+	if !g.Active {
+		return
+	}
+	icon, _ := s.reg.Resolve(g.Icon)
+	img := renderGhostIcon(icon, isoGhostSize, s.ghostBase())
+	compositeGhost(buf, s.w, s.h, img, g.X, g.Y, isoGhostOpacity)
+}
+
+// isoGhostWorldBox is the world-space box every ghost is fit to — a unit footprint
+// two units tall, the extent of the tallest built-in icon — so a two-tall tower
+// reads taller than a one-tall box, matching the palette thumbnails.
+var isoGhostWorldBox = [8]iso.Vec3{
+	iso.V(0, 0, 0), iso.V(1, 0, 0), iso.V(0, 1, 0), iso.V(1, 1, 0),
+	iso.V(0, 0, 2), iso.V(1, 0, 2), iso.V(0, 1, 2), iso.V(1, 1, 2),
+}
+
+// ghostProjBBox is the screen bounding box of the world box projected through pr.
+func ghostProjBBox(pr *iso.Projection) (minX, minY, maxX, maxY float64) {
+	for i, v := range isoGhostWorldBox {
+		p := pr.Project(v)
+		if i == 0 {
+			minX, maxX, minY, maxY = p.X, p.X, p.Y, p.Y
+			continue
+		}
+		minX, maxX = math.Min(minX, p.X), math.Max(maxX, p.X)
+		minY, maxY = math.Min(minY, p.Y), math.Max(maxY, p.Y)
+	}
+	return
+}
+
+// isoGhostProjection builds the 2:1 isometric projection that fits the world box
+// centred into a size×size square with a size/8 margin — the same fit the palette
+// thumbnails use, so the ghost matches the palette entry the user grabbed.
+func isoGhostProjection(size int) *iso.Projection {
+	pad := float64(size) / 8
+	inner := float64(size) - 2*pad
+	ref := iso.New(geometry.Pt(0, 0), 1, 0.5, 0.5)
+	minX, minY, maxX, maxY := ghostProjBBox(ref)
+	bw, bh := maxX-minX, maxY-minY
+	scale := inner / bw
+	if s := inner / bh; s < scale {
+		scale = s
+	}
+	proj := iso.New(geometry.Pt(0, 0), scale, scale/2, scale/2)
+	minX, minY, maxX, maxY = ghostProjBBox(proj)
+	bw, bh = maxX-minX, maxY-minY
+	proj.Origin = geometry.Pt(pad+(inner-bw)/2-minX, pad+(inner-bh)/2-minY)
+	return proj
+}
+
+// renderGhostIcon renders icon into a fresh size×size TRANSPARENT buffer (so only
+// the icon shows when it is composited): a sprite icon's art is blitted to fill the
+// square, a primitive icon's shapes are depth-sorted through the fitted projection.
+func renderGhostIcon(icon toolkit.IsoIcon, size int, base stdcolor.RGBA) *raster.Image {
+	img := raster.New(size, size)
+	dr := icon.Render(0, 0, base)
+	if dr.Sprite != nil {
+		drawGhostSprite(img, dr.Sprite)
+	}
+	if len(dr.Shapes) > 0 {
+		iso.NewScene(isoGhostProjection(size)).Add(dr.Shapes...).Render(img)
+	}
+	return img
+}
+
+// drawGhostSprite blits src into dst scaled to fill it (nearest-neighbour), copying
+// only non-transparent source pixels so the sprite's own transparency is preserved.
+func drawGhostSprite(dst, src *raster.Image) {
+	for y := 0; y < dst.H; y++ {
+		sy := y * src.H / dst.H
+		for x := 0; x < dst.W; x++ {
+			c := src.At(x*src.W/dst.W, sy)
+			if c.A == 0 {
+				continue
+			}
+			dst.Set(x, y, c)
+		}
+	}
+}
+
+// compositeGhost source-over blends img, centred on (cx, cy) and scaled by opacity,
+// into the surface buffer buf (surfW×surfH RGBA), clipped to the surface. It is the
+// one place the ghost touches the finished frame.
+func compositeGhost(buf []byte, surfW, surfH int, img *raster.Image, cx, cy int, opacity uint8) {
+	ox, oy := cx-img.W/2, cy-img.H/2
+	for y := 0; y < img.H; y++ {
+		dy := oy + y
+		if dy < 0 || dy >= surfH {
+			continue
+		}
+		for x := 0; x < img.W; x++ {
+			dx := ox + x
+			if dx < 0 || dx >= surfW {
+				continue
+			}
+			si := img.PixOffset(x, y)
+			a := uint32(img.Pix[si+3]) * uint32(opacity) / 255
+			if a == 0 {
+				continue
+			}
+			di := 4 * (dy*surfW + dx)
+			ia := 255 - a
+			buf[di] = uint8((uint32(img.Pix[si])*a + uint32(buf[di])*ia) / 255)
+			buf[di+1] = uint8((uint32(img.Pix[si+1])*a + uint32(buf[di+1])*ia) / 255)
+			buf[di+2] = uint8((uint32(img.Pix[si+2])*a + uint32(buf[di+2])*ia) / 255)
+			buf[di+3] = 255
+		}
+	}
 }
 
 // --- webcanvas.Animator -------------------------------------------------
@@ -650,9 +930,9 @@ func (s *isoScene) AnimationStep(dt float64) bool {
 // an in-memory buffer has no I/O to fail on, so its (impossible here) error is
 // discarded — matching toolkit.RenderPNG's documented reasoning.
 func (s *isoScene) encodePNG() []byte {
-	buf := make([]byte, 4*isoSurfaceW*isoSurfaceH)
+	buf := make([]byte, 4*s.w*s.h)
 	s.Draw(buf)
-	img := image.NewRGBA(image.Rect(0, 0, isoSurfaceW, isoSurfaceH))
+	img := image.NewRGBA(image.Rect(0, 0, s.w, s.h))
 	copy(img.Pix, buf)
 	var out bytes.Buffer
 	_ = png.Encode(&out, img)
@@ -700,6 +980,18 @@ func rotatedScene() *isoScene {
 	return s
 }
 
+// ghostScene returns a fresh scene with an icon armed from the palette and the
+// drag ghost hovering over the centre of Site A, so a capture shows the translucent
+// preview riding under the pointer. It is the drag-ghost proof, reused by the
+// capture set.
+func ghostScene() *isoScene {
+	s := newIsoScene()
+	s.palette.SelectIcon(iconCache) // a still icon reads clearly as a ghost
+	da := s.diaA.Bounds()
+	s.Move(da.X+da.W/2, da.Y+da.H/2)
+	return s
+}
+
 // renderPanel captures one diagram canvas at panel size. panelW/panelDrawH are
 // positive, so RenderPNG cannot fail; its error is discarded.
 func renderPanel(d *toolkit.IsoDiagram, theme *toolkit.Theme) []byte {
@@ -715,18 +1007,21 @@ type isoCapture struct {
 
 // isoCaptures builds the demonstrator's showcase images in a stable order: the
 // full enriched editor, the two converged replica canvases (identical bytes), one
-// mid-cycle animation frame and one clockwise-rotated view.
+// mid-cycle animation frame, one clockwise-rotated view and one full-surface frame
+// with the drag ghost under the pointer.
 func isoCaptures() []isoCapture {
 	editor := newIsoScene()
 	conv := convergedScene()
 	anim := animatedScene()
 	rot := rotatedScene()
+	ghost := ghostScene()
 	return []isoCapture{
 		{"iso-editor.png", editor.encodePNG()},
 		{"converged-a.png", renderPanel(conv.diaA, conv.theme)},
 		{"converged-b.png", renderPanel(conv.diaB, conv.theme)},
 		{"anim-frame.png", renderPanel(anim.diaA, anim.theme)},
 		{"rotated-a.png", renderPanel(rot.diaA, rot.theme)},
+		{"iso-ghost.png", ghost.encodePNG()},
 	}
 }
 

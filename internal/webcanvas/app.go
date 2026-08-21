@@ -12,6 +12,12 @@
 // build tag, so it drops out of the native build entirely.
 package webcanvas
 
+import (
+	"fmt"
+	"os"
+	"runtime/debug"
+)
+
 // App is a self-contained canvas scene. A host (the wasm [Run] loop, or a
 // native test) owns the pixel buffer and the event source; the App owns the
 // widgets. Every coordinate is in canvas-local pixels (top-left origin), the
@@ -80,4 +86,49 @@ type Animator interface {
 	// AnimationStep advances the scene's animation by dt seconds of real elapsed
 	// time and reports whether the scene now needs a repaint.
 	AnimationStep(dt float64) (repaint bool)
+}
+
+// Resizer is an optional companion to [App]: a scene that can adapt its layout to
+// a NEW surface size implements it, and [Run] installs a window "resize" listener
+// (and fits the canvas to the viewport once at startup) that re-sizes the canvas
+// and framebuffer, calls Resize, and repaints. A scene that omits it keeps the
+// fixed [App.Size] forever — the pre-resize behaviour every existing demo relies
+// on — so Run never installs the listener and the surface never changes.
+//
+// Resize is handed the target pixel size (the canvas' laid-out client box) and
+// returns the size it will actually render at: a scene may clamp to a sane
+// minimum, and the host allocates the framebuffer from the RETURNED size, so the
+// scene and the buffer can never disagree. The relayout logic lives in the scene
+// (natively testable); only the DOM resize wiring is browser-side.
+type Resizer interface {
+	// Resize relays out the scene to fit w×h device pixels and returns the pixel
+	// size (rw, rh) it will render at — the size the host sizes the canvas and
+	// framebuffer to.
+	Resize(w, h int) (rw, rh int)
+}
+
+// PanicReporter logs a handler panic the [guard] net recovered. The wasm host
+// swaps in a console.error reporter carrying the JS stack; the default writes to
+// standard error so a native run — and the recover test — still surfaces it. It
+// is a package var, not a const, precisely so run_js.go can replace it.
+var PanicReporter = func(r any, stack []byte) {
+	fmt.Fprintf(os.Stderr, "webcanvas: recovered panic in a handler: %v\n%s\n", r, stack)
+}
+
+// guard runs fn under a recover net: a panic escaping a single event handler (or
+// the paint it triggers) is caught, reported through [PanicReporter] with its
+// stack, and swallowed — so ONE bad frame logs an error instead of tearing the
+// whole wasm instance off the page, and the next dispatch still runs. It reports
+// whether fn panicked so a test can prove the net fired. It is deliberately a
+// last-resort net IN ADDITION to the toolkit's own per-widget hardening, never a
+// substitute for fixing the upstream bug.
+func guard(fn func()) (panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicked = true
+			PanicReporter(r, debug.Stack())
+		}
+	}()
+	fn()
+	return false
 }
