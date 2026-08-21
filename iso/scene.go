@@ -735,11 +735,19 @@ func (s *isoScene) Context(x, y int) bool {
 // toolbar rather than typing, so there is nothing to type into.
 func (s *isoScene) Char(string) bool { return false }
 
-// KeyDown routes a named key. Escape cancels an in-flight placement — it disarms
-// the palette (which clears the ghost via the selected-icon binding) so a mistaken
-// grab is dropped without placing anything. Every other key forwards to the active
-// canvas (Delete removes the selection) and syncs any resulting edit to the peer.
+// KeyDown routes a named key. A scroll key (arrows / Page / Home / End) drives
+// the docked palette — the workspace's scrollable list — through its own
+// EventScroll, so the sidebar scrolls from the keyboard as well as the wheel (the
+// active canvas ignores these keys, so routing them to the palette is purely
+// additive). Escape cancels an in-flight placement — it disarms the palette (which
+// clears the ghost via the selected-icon binding) so a mistaken grab is dropped
+// without placing anything. Every other key forwards to the active canvas (Delete
+// removes the selection) and syncs any resulting edit to the peer.
 func (s *isoScene) KeyDown(code string) bool {
+	if rows, ok := paletteScrollRows(code); ok {
+		s.scrollPalette(rows)
+		return true
+	}
 	if code == "Escape" {
 		s.palette.SelectIcon("")
 		s.clearGhost()
@@ -748,6 +756,70 @@ func (s *isoScene) KeyDown(code string) bool {
 	}
 	s.active.OnEvent(toolkit.Event{Kind: toolkit.EventKeyDown, Code: code})
 	s.afterEdit()
+	return true
+}
+
+// isoPalettePageRows is how many rows a PageUp / PageDown scrolls the palette;
+// isoPaletteEndRows is a deliberately huge row count so Home / End pin to the top /
+// bottom (the palette clamps the scroll offset to its content, so an over-large
+// delta simply lands on the first or last row).
+const (
+	isoPalettePageRows = 5
+	isoPaletteEndRows  = 1 << 20
+)
+
+// paletteScrollRows maps a scroll key to the palette EventScroll Delta it drives —
+// in rows, positive scrolling down / toward the end — and whether the key is a
+// scroll key at all. Non-scroll keys return (0, false) so KeyDown handles them as
+// before.
+func paletteScrollRows(code string) (int, bool) {
+	switch code {
+	case "ArrowUp":
+		return -1, true
+	case "ArrowDown":
+		return 1, true
+	case "PageUp":
+		return -isoPalettePageRows, true
+	case "PageDown":
+		return isoPalettePageRows, true
+	case "Home":
+		return -isoPaletteEndRows, true
+	case "End":
+		return isoPaletteEndRows, true
+	}
+	return 0, false
+}
+
+// scrollPalette scrolls the docked palette by rows (positive scrolls down),
+// delivering the palette's own EventScroll — the same path the wheel takes — which
+// clamps at both ends.
+func (s *isoScene) scrollPalette(rows int) {
+	b := s.palette.Bounds()
+	s.palette.OnEvent(toolkit.Event{Kind: toolkit.EventScroll, X: b.W / 2, Y: b.H / 2, Delta: rows})
+}
+
+// Scroll is the [webcanvas.Scroller] hook: it routes a wheel / trackpad gesture to
+// the region under (x, y) as a toolkit EventScroll. Over the docked palette the
+// icon list scrolls (dy rows vertical, dx for a horizontal swipe); over a canvas
+// the wheel zooms that diagram about the pointer — its native EventScroll
+// behaviour — and makes it the active canvas, so the existing zoom gesture is
+// preserved. A wheel over dead space is ignored (no repaint).
+func (s *isoScene) Scroll(x, y, dx, dy int) bool {
+	switch {
+	case s.palette.Bounds().Contains(x, y):
+		b := s.palette.Bounds()
+		s.palette.OnEvent(toolkit.Event{Kind: toolkit.EventScroll, X: x - b.X, Y: y - b.Y, Delta: dy, DeltaX: dx})
+	case s.diaA.Bounds().Contains(x, y):
+		b := s.diaA.Bounds()
+		s.diaA.OnEvent(toolkit.Event{Kind: toolkit.EventScroll, X: x - b.X, Y: y - b.Y, Delta: dy, DeltaX: dx})
+		s.setActive(s.diaA)
+	case s.diaB.Bounds().Contains(x, y):
+		b := s.diaB.Bounds()
+		s.diaB.OnEvent(toolkit.Event{Kind: toolkit.EventScroll, X: x - b.X, Y: y - b.Y, Delta: dy, DeltaX: dx})
+		s.setActive(s.diaB)
+	default:
+		return false
+	}
 	return true
 }
 

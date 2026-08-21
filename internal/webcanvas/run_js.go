@@ -137,6 +137,36 @@ func Run(screenID string, app App) {
 		return nil
 	}))
 
+	// Optional wheel scrolling: a [Scroller] scene gets the browser's wheel routed
+	// to the widget under the pointer as toolkit scroll ROWS (deltaX/deltaY
+	// normalised for the event's deltaMode). preventDefault stops the page itself
+	// from scrolling under the canvas, so the wheel reaches the scene's scrollable
+	// region instead of the document. A scene that does not implement Scroller
+	// installs no listener, so the page's default wheel handling — and every
+	// existing demo — is untouched.
+	if sc, ok := app.(Scroller); ok {
+		wheel := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			guard(func() {
+				if len(args) == 0 {
+					return
+				}
+				ev := args[0]
+				ev.Call("preventDefault")
+				x, y := coords(ev)
+				mode := ev.Get("deltaMode").Int()
+				dx := scrollRows(ev.Get("deltaX").Float(), mode)
+				dy := scrollRows(ev.Get("deltaY").Float(), mode)
+				if sc.Scroll(x, y, dx, dy) {
+					render()
+				}
+			})
+			return nil
+		})
+		// passive:false is required for preventDefault to take effect on a wheel
+		// listener (browsers treat wheel as passive by default).
+		canvas.Call("addEventListener", "wheel", wheel, map[string]any{"passive": false})
+	}
+
 	// Optional viewport tracking: a [Resizer] scene fills the browser window and
 	// relayouts on every resize. resize reads the canvas' laid-out client box,
 	// asks the scene to relayout to it (which returns the size it will render at),
