@@ -467,11 +467,11 @@ func newState(w, _ int) *state {
 	s.dropdown.Selected().Subscribe(func(i int) { s.showNotify("Encoding: " + s.dropdown.Options[i]) })
 
 	s.progress = toolkit.NewProgressBar()
-	s.progress.Fraction = 0.66
+	s.progress.Fraction().Set(0.66)
 	s.progress.Label = "66 %"
 
 	s.level = toolkit.NewLevelBar(10)
-	s.level.Value = 7
+	s.level.Value().Set(7)
 
 	s.spinner = toolkit.NewSpinner()
 	s.spinner.Active().Set(true)
@@ -1245,15 +1245,15 @@ func (s *state) notebookPage() toolkit.Widget {
 func (s *state) clearChartHovers() {
 	switch c := s.notebookPage().(type) {
 	case *toolkit.LineChart:
-		c.Hover = false
+		c.Hover().Set(false)
 	case *toolkit.BarChart:
-		c.Hover = false
+		c.Hover().Set(false)
 	case *toolkit.PieChart:
-		c.Hover = false
+		c.Hover().Set(false)
 	}
-	s.areaChart.Hover = false
-	s.scatterChart.Hover = false
-	s.radarChart.Hover = false
+	s.areaChart.Hover().Set(false)
+	s.scatterChart.Hover().Set(false)
+	s.radarChart.Hover().Set(false)
 	s.sparkLine.Hover().Set(false)
 	s.sparkBar.Hover().Set(false)
 }
@@ -1270,21 +1270,24 @@ func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
 	case *toolkit.LineChart:
 		if r := c.Bounds(); inside(x, y, r) {
 			if i, v, ok := c.ValueAt(x - r.X); ok {
-				c.Hover, c.HoverIndex = true, i
+				c.Hover().Set(true)
+				c.HoverIndex().Set(i)
 				return chVal(i, v), x, y
 			}
 		}
 	case *toolkit.BarChart:
 		if r := c.Bounds(); inside(x, y, r) {
 			if i, v, ok := c.ValueAt(x - r.X); ok {
-				c.Hover, c.HoverIndex = true, i
+				c.Hover().Set(true)
+				c.HoverIndex().Set(i)
 				return chVal(i, v), x, y
 			}
 		}
 	case *toolkit.PieChart:
 		if r := c.Bounds(); inside(x, y, r) {
 			if i, v, ok := c.SliceAt(x-r.X, y-r.Y); ok {
-				c.Hover, c.HoverIndex = true, i
+				c.Hover().Set(true)
+				c.HoverIndex().Set(i)
 				return chVal(i, v), x, y
 			}
 		}
@@ -1292,21 +1295,25 @@ func (s *state) chartHoverText(x, y int) (text string, ax, ay int) {
 	// Wave-7 AreaChart (value + crosshair).
 	if r := s.areaChart.Bounds(); inside(x, y, r) {
 		if i, v, ok := s.areaChart.ValueAt(x - r.X); ok {
-			s.areaChart.Hover, s.areaChart.HoverIndex = true, i
+			s.areaChart.Hover().Set(true)
+			s.areaChart.HoverIndex().Set(i)
 			return chVal(i, v), x, y
 		}
 	}
 	// Wave-7 ScatterChart (nearest point → its X,Y + ring).
 	if r := s.scatterChart.Bounds(); inside(x, y, r) {
 		if si, pi, pt, ok := s.scatterChart.NearestPoint(x-r.X, y-r.Y); ok {
-			s.scatterChart.Hover, s.scatterChart.HoverSeries, s.scatterChart.HoverPoint = true, si, pi
+			s.scatterChart.Hover().Set(true)
+			s.scatterChart.HoverSeries().Set(si)
+			s.scatterChart.HoverPoint().Set(pi)
 			return "(" + ftoa(pt.X) + ", " + ftoa(pt.Y) + ")", x, y
 		}
 	}
 	// Wave-7 RadarChart (nearest axis → its label + first-series value + spoke).
 	if r := s.radarChart.Bounds(); inside(x, y, r) {
 		if k, ok := s.radarChart.AxisAt(x-r.X, y-r.Y); ok && len(s.radarChart.Series) > 0 && k < len(s.radarChart.Series[0]) {
-			s.radarChart.Hover, s.radarChart.HoverAxis = true, k
+			s.radarChart.Hover().Set(true)
+			s.radarChart.HoverAxis().Set(k)
 			return s.radarChart.Axes[k] + " = " + ftoa(s.radarChart.Series[0][k]), x, y
 		}
 	}
