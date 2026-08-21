@@ -9,7 +9,7 @@ require (
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.8.0
 	github.com/go-widgets/painter v0.11.0
-	github.com/go-widgets/toolkit v0.226.0
+	github.com/go-widgets/toolkit v0.230.0
 )
 
 require (
