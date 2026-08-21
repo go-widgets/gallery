@@ -177,7 +177,7 @@ func TestHandleClickToolbarFiresNotification(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	// First toolbar button (item 0, x≈12).
 	s.handleClick(12, toolkit.MenuBarH+toolkit.ToolbarButtonH/2)
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("toolbar click did not fire a Notification")
 	}
 	if s.notify.Text == "" {
@@ -199,7 +199,7 @@ func TestHandleClickMenuItemDismissesAndFires(t *testing.T) {
 	if s.menuBar.Active().Get() != -1 {
 		t.Fatalf("menu should dismiss after item click; Active=%d", s.menuBar.Active().Get())
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("menu-item click should fire the item's Action → Notification")
 	}
 }
@@ -224,7 +224,7 @@ func TestClickButtonFiresHandler(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.button.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+r.H/2)
-	if !s.notify.Visible || s.notify.Text == "" {
+	if !s.notify.Visible().Get() || s.notify.Text == "" {
 		t.Fatal("Button click did not fire the Notification")
 	}
 }
@@ -236,7 +236,7 @@ func TestClickToggleFiresOnToggle(t *testing.T) {
 	if !s.toggle.Pressed().Get() {
 		t.Fatal("Toggle click did not flip Pressed to true")
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("Toggle click did not fire the Notification")
 	}
 	// Click again — flips back.
@@ -286,7 +286,7 @@ func TestClickDeadSpaceIsNoOp(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	// Between the Statusbar and the last card — should hit nothing.
 	s.handleClick(surfaceW/2, surfaceH-toolkit.StatusbarH-2)
-	if s.notify.Visible {
+	if s.notify.Visible().Get() {
 		t.Fatal("dead-space click should not trigger any Notification")
 	}
 }
@@ -312,9 +312,9 @@ func TestAllToolbarStubsFire(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	// Separators sit at indices 3 and 7 — no OnClick.
 	for _, i := range []int{0, 1, 2, 4, 5, 6, 8} {
-		s.notify.Visible = false
+		s.notify.Visible().Set(false)
 		s.toolbar.Items[i].OnClick()
-		if !s.notify.Visible {
+		if !s.notify.Visible().Get() {
 			t.Errorf("Items[%d].OnClick did not show a notification", i)
 		}
 	}
@@ -455,9 +455,9 @@ func TestWave4ParamsWired(t *testing.T) {
 func TestAllToolbarVStubsFire(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	for i := range s.toolbarV.Items {
-		s.notify.Visible = false
+		s.notify.Visible().Set(false)
 		s.toolbarV.Items[i].OnClick()
-		if !s.notify.Visible {
+		if !s.notify.Visible().Get() {
 			t.Errorf("toolbarV.Items[%d].OnClick did not show a notification", i)
 		}
 	}
@@ -470,7 +470,7 @@ func TestClickToolbarVDispatchesThroughClickables(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
 	r := s.toolbarV.Bounds()
 	s.handleClick(r.X+r.W/2, r.Y+toolkit.ToolbarButtonH/2)
-	if !s.notify.Visible || s.notify.Text == "" {
+	if !s.notify.Visible().Get() || s.notify.Text == "" {
 		t.Fatal("clicking the vertical toolbar's first button did not fire a notification")
 	}
 }
@@ -773,14 +773,14 @@ func TestAgendaEventEditing(t *testing.T) {
 	}
 	// A click anywhere while editing routes to the editor; (1,1) is outside the
 	// centred panel, so it commits + closes and notifies via OnEventEdited.
-	s.notify.Visible = false
+	s.notify.Visible().Set(false)
 	if !s.handleClick(1, 1) {
 		t.Fatal("click while editing should be consumed")
 	}
 	if s.agenda.Editing() != -1 {
 		t.Fatal("outside click should close the editor")
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("committing an edit should fire OnEventEdited → a notification")
 	}
 }
@@ -794,20 +794,20 @@ func TestAgendaSidebarToggle(t *testing.T) {
 	rowX := sb.X + 10
 	rowY := sb.Y + toolkit.AgendaHeaderH + toolkit.AgendaSidebarRowH/2 // row 0
 
-	s.notify.Visible = false
+	s.notify.Visible().Set(false)
 	s.handleClick(rowX, rowY) // hide "Team"
 	if !s.agendaCals[0].Hidden {
 		t.Fatal("first sidebar click should hide calendar 0")
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("OnToggle should notify on hide")
 	}
-	s.notify.Visible = false
+	s.notify.Visible().Set(false)
 	s.handleClick(rowX, rowY) // show it again
 	if s.agendaCals[0].Hidden {
 		t.Fatal("second sidebar click should show calendar 0")
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("OnToggle should notify on show")
 	}
 }
@@ -831,7 +831,7 @@ func TestDropDownPopover(t *testing.T) {
 	s.draw(newSurface()) // renders the popover (covers the draw branch)
 
 	pb := s.dropdown.PopoverBounds()
-	s.notify.Visible = false
+	s.notify.Visible().Set(false)
 	s.handleClick(pb.X+5, pb.Y+toolkit.PopoverRowH+2) // click option row 1
 	if s.dropdown.Selected().Get() != 1 {
 		t.Fatalf("Selected=%d, want 1", s.dropdown.Selected().Get())
@@ -839,7 +839,7 @@ func TestDropDownPopover(t *testing.T) {
 	if s.dropdown.Open().Get() {
 		t.Fatal("popover should close after a selection")
 	}
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("OnSelect did not fire a notification")
 	}
 	// Reopen, then an outside click dismisses it.
@@ -954,9 +954,9 @@ func TestFtoa(t *testing.T) {
 // TestDropdownUpSelect covers the second dropdown's OnSelect closure.
 func TestDropdownUpSelect(t *testing.T) {
 	s := newState(surfaceW, surfaceH)
-	s.notify.Visible = false
+	s.notify.Visible().Set(false)
 	s.dropdownUp.Select(1)
-	if !s.notify.Visible {
+	if !s.notify.Visible().Get() {
 		t.Fatal("dropdownUp OnSelect did not fire a notification")
 	}
 }
@@ -971,7 +971,7 @@ func TestAreaChartHoverCrosshair(t *testing.T) {
 	lc := s.notebook.Tabs[0].Page.(*toolkit.LineChart)
 	lr := lc.Bounds()
 	s.handleHover(lr.X+lr.W/2, lr.Y+lr.H/2)
-	if !lc.Hover {
+	if !lc.Hover().Get() {
 		t.Fatal("line-chart hover did not arm the crosshair")
 	}
 
@@ -980,15 +980,15 @@ func TestAreaChartHoverCrosshair(t *testing.T) {
 	if !s.handleHover(ar.X+ar.W/2, ar.Y+ar.H/2) || !s.tooltip.Visible().Get() {
 		t.Fatal("area-chart hover did not show a tooltip")
 	}
-	if !s.areaChart.Hover {
+	if !s.areaChart.Hover().Get() {
 		t.Fatal("area-chart hover did not arm the crosshair")
 	}
-	if lc.Hover {
+	if lc.Hover().Get() {
 		t.Fatal("moving to the area chart should clear the line crosshair")
 	}
 	// Leaving every chart clears the area crosshair.
 	s.handleHover(1, 1)
-	if s.areaChart.Hover {
+	if s.areaChart.Hover().Get() {
 		t.Fatal("leaving the chart should clear the area crosshair")
 	}
 }
@@ -1000,11 +1000,11 @@ func TestAllChartsHover(t *testing.T) {
 	s.draw(newSurface())
 
 	sr := s.scatterChart.Bounds()
-	if !s.handleHover(sr.X+sr.W/2, sr.Y+sr.H/2) || !s.tooltip.Visible().Get() || !s.scatterChart.Hover {
+	if !s.handleHover(sr.X+sr.W/2, sr.Y+sr.H/2) || !s.tooltip.Visible().Get() || !s.scatterChart.Hover().Get() {
 		t.Fatal("scatter hover should show a tooltip + ring")
 	}
 	rr := s.radarChart.Bounds()
-	if !s.handleHover(rr.X+rr.W/2, rr.Y+rr.H/4) || !s.tooltip.Visible().Get() || !s.radarChart.Hover {
+	if !s.handleHover(rr.X+rr.W/2, rr.Y+rr.H/4) || !s.tooltip.Visible().Get() || !s.radarChart.Hover().Get() {
 		t.Fatal("radar hover should show a tooltip + spoke")
 	}
 	sl := s.sparkLine.Bounds()
