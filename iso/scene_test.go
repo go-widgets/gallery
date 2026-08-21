@@ -584,6 +584,158 @@ func TestEventRoutingCoverage(t *testing.T) {
 	}
 }
 
+// --- palette scroll proof (wheel + keyboard) ----------------------------
+
+// palettePixels draws the whole scene and returns a copy of just the palette's
+// bounding-rectangle pixels, so a test can prove a scroll changed what the palette
+// shows without depending on the rest of the surface.
+func palettePixels(s *isoScene) []byte {
+	buf := make([]byte, 4*s.w*s.h)
+	s.Draw(buf)
+	b := s.palette.Bounds()
+	out := make([]byte, 0, 4*b.W*b.H)
+	for y := b.Y; y < b.Y+b.H; y++ {
+		i := 4 * (y*s.w + b.X)
+		out = append(out, buf[i:i+4*b.W]...)
+	}
+	return out
+}
+
+// TestWheelOverPaletteScrollsList proves the wheel reaches the docked palette: a
+// wheel-down over the palette changes the icon slice it shows (a lower icon
+// becomes visible), and a wheel-up returns it to its top frame — a real,
+// reversible offset change clamped at the top, not incidental repaint noise. This
+// is the bug the fix targets: the harness now routes the wheel to the palette.
+func TestWheelOverPaletteScrollsList(t *testing.T) {
+	s := newIsoScene()
+	pb := s.palette.Bounds()
+	cx, cy := pb.X+pb.W/2, pb.Y+pb.H/2
+
+	top := palettePixels(s)
+	if !s.Scroll(cx, cy, 0, 4) {
+		t.Fatal("wheel over the palette reported no repaint")
+	}
+	scrolled := palettePixels(s)
+	if bytes.Equal(top, scrolled) {
+		t.Fatal("wheel over the palette did not scroll the list (pixels unchanged)")
+	}
+	if !s.Scroll(cx, cy, 0, -100) { // clamps back to the top
+		t.Fatal("wheel-up over the palette reported no repaint")
+	}
+	if !bytes.Equal(top, palettePixels(s)) {
+		t.Fatal("wheel-up did not return the palette to its top offset")
+	}
+}
+
+// TestWheelOverCanvasZooms proves the wheel over a canvas keeps its existing zoom
+// behaviour (the diagram's native EventScroll), makes that canvas active, and that
+// a wheel over dead space is ignored — so the fix adds palette scrolling without
+// breaking the canvas gesture.
+func TestWheelOverCanvasZooms(t *testing.T) {
+	s := newIsoScene()
+
+	da := s.diaA.Bounds()
+	beforeA := s.diaA.Projection().TileW
+	if !s.Scroll(da.X+da.W/2, da.Y+da.H/2, 0, -1) { // wheel up -> zoom in
+		t.Fatal("wheel over canvas A reported no repaint")
+	}
+	if s.diaA.Projection().TileW == beforeA {
+		t.Fatal("wheel over canvas A did not zoom (tile width unchanged)")
+	}
+	if s.activeName() != "A" {
+		t.Fatalf("wheel over canvas A did not make it active (active %s)", s.activeName())
+	}
+
+	db := s.diaB.Bounds()
+	beforeB := s.diaB.Projection().TileW
+	if !s.Scroll(db.X+db.W/2, db.Y+db.H/2, 0, 1) { // wheel down -> zoom out
+		t.Fatal("wheel over canvas B reported no repaint")
+	}
+	if s.diaB.Projection().TileW == beforeB {
+		t.Fatal("wheel over canvas B did not zoom")
+	}
+	if s.activeName() != "B" {
+		t.Fatalf("wheel over canvas B did not make it active (active %s)", s.activeName())
+	}
+
+	if s.Scroll(400, isoStatusY-2, 0, 1) {
+		t.Fatal("wheel in dead space should not be handled")
+	}
+}
+
+// TestKeyboardScrollsPalette proves every scroll key drives the palette: the down
+// keys (Arrow / Page / End) each move the list off its top, the up keys
+// (Arrow / Page / Home) bring it back, and a non-scroll key (Delete) still routes
+// to the active canvas.
+func TestKeyboardScrollsPalette(t *testing.T) {
+	for _, key := range []string{"ArrowDown", "PageDown", "End"} {
+		s := newIsoScene()
+		top := palettePixels(s)
+		if !s.KeyDown(key) {
+			t.Fatalf("%s reported not handled", key)
+		}
+		if bytes.Equal(top, palettePixels(s)) {
+			t.Fatalf("%s did not scroll the palette", key)
+		}
+	}
+
+	// Scroll to the end, then the up keys return it to the top.
+	s := newIsoScene()
+	top := palettePixels(s)
+	s.KeyDown("End")
+	if bytes.Equal(top, palettePixels(s)) {
+		t.Fatal("End did not move the palette off the top")
+	}
+	for _, key := range []string{"ArrowUp", "PageUp", "Home"} {
+		if !s.KeyDown(key) {
+			t.Fatalf("%s reported not handled", key)
+		}
+	}
+	if !bytes.Equal(top, palettePixels(s)) {
+		t.Fatal("the up keys did not return the palette to its top")
+	}
+
+	// A non-scroll key still routes to the active canvas.
+	if !s.KeyDown("Delete") {
+		t.Fatal("Delete should be handled by the active canvas")
+	}
+}
+
+// TestScrolledPaletteCapture writes a full-surface PNG with the palette scrolled a
+// few rows down (into ISO_OUT when set, so a human can inspect it, else a temp
+// dir), and checks it decodes at the surface size. It doubles as the proof
+// artifact for the fix.
+func TestScrolledPaletteCapture(t *testing.T) {
+	dir := os.Getenv("ISO_OUT")
+	if dir == "" {
+		dir = t.TempDir()
+	} else if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := newIsoScene()
+	pb := s.palette.Bounds()
+	s.Scroll(pb.X+pb.W/2, pb.Y+pb.H/2, 0, 6) // slide a lower slice of the list into view
+
+	path := filepath.Join(dir, "iso-palette-scrolled.png")
+	if err := os.WriteFile(path, s.encodePNG(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	f.Close()
+	if err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	if cfg.Width != s.w || cfg.Height != s.h {
+		t.Fatalf("%s is %dx%d, want %dx%d", path, cfg.Width, cfg.Height, s.w, s.h)
+	}
+	t.Logf("wrote scrolled-palette capture to %s", path)
+}
+
 // --- PNG capture plumbing ------------------------------------------------
 
 // TestGeneratePNGs writes the showcase images (into ISO_OUT when set, so a human
