@@ -16,6 +16,7 @@ import (
 
 	gfxcolor "github.com/go-gfx/gfx/color"
 	"github.com/go-gfx/gfx/iso"
+	"github.com/go-gfx/gfx/raster"
 
 	"github.com/go-widgets/isoicons"
 	"github.com/go-widgets/toolkit"
@@ -559,8 +560,11 @@ func TestEventRoutingCoverage(t *testing.T) {
 	if s.Click(400, isoStatusY-2) {
 		t.Fatal("click in dead space should not be handled")
 	}
-	if s.Move(401, isoStatusY-2) { // hover with nothing captured
-		t.Fatal("hover with no capture should not repaint")
+	// Disarm first (the palette press above may have armed an icon): with nothing
+	// in hand a hover over dead space repaints nothing.
+	s.palette.SelectIcon("")
+	if s.Move(401, isoStatusY-2) { // hover with nothing captured, nothing armed
+		t.Fatal("hover with no capture and no armed icon should not repaint")
 	}
 
 	// Context over Site B opens its menu; over the toolbar it is ignored.
@@ -607,6 +611,7 @@ func TestGeneratePNGs(t *testing.T) {
 		{"converged-b.png", panelW, panelDrawH},
 		{"anim-frame.png", panelW, panelDrawH},
 		{"rotated-a.png", panelW, panelDrawH},
+		{"iso-ghost.png", isoSurfaceW, isoSurfaceH},
 	}
 	if len(paths) != len(want) {
 		t.Fatalf("wrote %d files, want %d", len(paths), len(want))
@@ -642,5 +647,212 @@ func TestGeneratePNGsError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-such-dir")
 	if _, err := generatePNGs(missing); err == nil {
 		t.Fatal("generatePNGs into a missing dir: want error")
+	}
+}
+
+// --- drag / placement ghost proof ---------------------------------------
+
+// TestGhostFollowsPointerAndPaints is the ghost proof: arming an icon makes the
+// preview follow the cursor EXACTLY (armed hover repaints and tracks the pointer,
+// re-hitting the same pixel does not), and a frame with the ghost differs from one
+// without it — so the translucent preview really paints under the pointer.
+func TestGhostFollowsPointerAndPaints(t *testing.T) {
+	s := newIsoScene()
+	if s.ghost.Get().Active {
+		t.Fatal("ghost active with nothing armed")
+	}
+
+	// Arm an icon (click-to-place style): a hover now drives the ghost.
+	s.palette.SelectIcon("server")
+	da := s.diaA.Bounds()
+	tx, ty := da.X+120, da.Y+140
+	if !s.Move(tx, ty) {
+		t.Fatal("armed hover did not repaint the ghost")
+	}
+	if g := s.ghost.Get(); !g.Active || g.Icon != "server" || g.X != tx || g.Y != ty {
+		t.Fatalf("ghost = %+v, want active server at (%d,%d)", g, tx, ty)
+	}
+	// Re-hitting the exact same pixel is a no-op repaint.
+	if s.Move(tx, ty) {
+		t.Fatal("re-hover to the same pixel should not repaint")
+	}
+	// The ghost follows to a new pixel.
+	tx2, ty2 := tx+40, ty+25
+	if !s.Move(tx2, ty2) {
+		t.Fatal("ghost did not follow to a new pixel")
+	}
+	if g := s.ghost.Get(); g.X != tx2 || g.Y != ty2 {
+		t.Fatalf("ghost at (%d,%d), want (%d,%d)", g.X, g.Y, tx2, ty2)
+	}
+
+	// A frame WITH the ghost differs from one without (only the ghost changed, the
+	// document is untouched), so the preview is genuinely painted.
+	withGhost := make([]byte, 4*s.w*s.h)
+	s.Draw(withGhost)
+	if !s.clearGhost() {
+		t.Fatal("clearGhost reported no change for an active ghost")
+	}
+	noGhost := make([]byte, 4*s.w*s.h)
+	s.Draw(noGhost)
+	if bytes.Equal(withGhost, noGhost) {
+		t.Fatal("the ghost frame is identical to the no-ghost frame — nothing painted")
+	}
+}
+
+// TestGhostDisappearsOnDropAndCancel proves the ghost's exit paths: it vanishes
+// when a drag-drop places a node AND when a grab is cancelled by releasing off any
+// canvas (which places nothing).
+func TestGhostDisappearsOnDropAndCancel(t *testing.T) {
+	// Drop path: dropIcon arms, grabs from the palette header (ghost active) and
+	// releases over Site A.
+	s := newIsoScene()
+	db := s.diaA.Bounds()
+	p := s.diaA.Projection().Project(iso.V(4.5, 4.5, 0))
+	n := dropIcon(s, "router", db.X+int(math.Round(p.X)), db.Y+int(math.Round(p.Y)))
+	if n == nil {
+		t.Fatal("drag-drop placed no node")
+	}
+	if s.ghost.Get().Active {
+		t.Fatal("ghost still showing after a drop")
+	}
+
+	// Cancel path: grab, then release back on the palette (off every canvas).
+	s2 := newIsoScene()
+	s2.palette.SelectIcon("router")
+	pb := s2.palette.Bounds()
+	s2.Click(pb.X+10, pb.Y+2)
+	if !s2.ghost.Get().Active {
+		t.Fatal("grab did not arm the ghost")
+	}
+	before := len(s2.docA.Nodes())
+	s2.Release(pb.X+10, pb.Y+40) // released on the palette, not a canvas
+	if len(s2.docA.Nodes()) != before {
+		t.Fatal("cancel off-canvas placed a node")
+	}
+	if s2.ghost.Get().Active {
+		t.Fatal("ghost still showing after an off-canvas cancel")
+	}
+}
+
+// TestEscapeCancelsGhost proves Escape drops an in-flight placement: the ghost
+// disappears and the palette disarms.
+func TestEscapeCancelsGhost(t *testing.T) {
+	s := newIsoScene()
+	s.palette.SelectIcon("server")
+	da := s.diaA.Bounds()
+	s.Move(da.X+100, da.Y+100)
+	if !s.ghost.Get().Active {
+		t.Fatal("ghost not armed before Escape")
+	}
+	if !s.KeyDown("Escape") {
+		t.Fatal("Escape was not handled")
+	}
+	if s.ghost.Get().Active {
+		t.Fatal("Escape did not cancel the ghost")
+	}
+	if s.palette.SelectedIcon().Get() != "" {
+		t.Fatal("Escape did not disarm the palette")
+	}
+}
+
+// TestGhostRendersSpriteAndComposites covers the two low-level ghost primitives
+// deterministically: a SPRITE icon is blitted into the preview (only its opaque
+// pixels), and the compositor blends the preview into the surface while clipping at
+// every edge and skipping fully transparent pixels.
+func TestGhostRendersSpriteAndComposites(t *testing.T) {
+	// A 2×2 sprite: one opaque pixel, three transparent — so drawGhostSprite hits
+	// both its copy and its transparent-skip paths.
+	src := raster.New(2, 2)
+	src.Set(0, 0, stdcolor.RGBA{R: 200, G: 30, B: 30, A: 255})
+	icon := toolkit.IsoSpriteIcon{Img: src}
+	img := renderGhostIcon(icon, isoGhostSize, stdcolor.RGBA{A: 255})
+	if img.W != isoGhostSize || img.H != isoGhostSize {
+		t.Fatalf("ghost image %dx%d, want %dx%d", img.W, img.H, isoGhostSize, isoGhostSize)
+	}
+	opaque := false
+	for i := 3; i < len(img.Pix); i += 4 {
+		if img.Pix[i] == 255 {
+			opaque = true
+			break
+		}
+	}
+	if !opaque {
+		t.Fatal("sprite ghost produced no opaque pixels")
+	}
+
+	// A 4×4 preview with one transparent pixel, composited three ways: clipped past
+	// the top-left, clipped past the bottom-right, and wholly inside.
+	ghost := raster.New(4, 4)
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			ghost.Set(x, y, stdcolor.RGBA{R: 10, G: 20, B: 30, A: 255})
+		}
+	}
+	ghost.Set(0, 0, stdcolor.RGBA{}) // transparent → the a==0 skip
+	const sw, sh = 10, 10
+	buf := make([]byte, 4*sw*sh)
+	for i := range buf {
+		buf[i] = 255 // opaque white ground, so a blend is observable
+	}
+	compositeGhost(buf, sw, sh, ghost, 0, 0, 200)   // ox,oy negative → top/left clip
+	compositeGhost(buf, sw, sh, ghost, sw, sh, 200) // dx,dy past the edge → bottom/right clip
+	compositeGhost(buf, sw, sh, ghost, 5, 5, 200)   // wholly inside → the blend path
+	changed := false
+	for _, b := range buf {
+		if b != 255 {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		t.Fatal("compositeGhost changed no pixels")
+	}
+}
+
+// --- full-page (resize) proof -------------------------------------------
+
+// TestFullPageResizeRelayouts proves the [webcanvas.Resizer] hook: the surface
+// grows to a larger viewport (the two canvases stretch to fill the width, side by
+// side and equal), and a below-floor request is clamped to the minimum workable
+// surface. This is the native stand-in for the browser resize wiring.
+func TestFullPageResizeRelayouts(t *testing.T) {
+	s := newIsoScene()
+	if w, h := s.Size(); w != isoSurfaceW || h != isoSurfaceH {
+		t.Fatalf("initial Size() = %dx%d, want %dx%d", w, h, isoSurfaceW, isoSurfaceH)
+	}
+
+	// Grow: the surface tracks the viewport and the canvases widen past the default.
+	rw, rh := s.Resize(1600, 900)
+	if rw != 1600 || rh != 900 {
+		t.Fatalf("Resize returned %dx%d, want 1600x900", rw, rh)
+	}
+	if w, h := s.Size(); w != 1600 || h != 900 {
+		t.Fatalf("Size() after grow = %dx%d, want 1600x900", w, h)
+	}
+	ba, bb := s.diaA.Bounds(), s.diaB.Bounds()
+	if ba.W != bb.W {
+		t.Fatalf("canvases unequal after resize: A.W=%d B.W=%d", ba.W, bb.W)
+	}
+	if ba.W <= isoPanelW {
+		t.Fatalf("canvas width %d did not grow past the default %d", ba.W, isoPanelW)
+	}
+	if bb.X+bb.W > 1600 {
+		t.Fatalf("Site B right edge %d overflows the 1600px surface", bb.X+bb.W)
+	}
+	if st := s.statusLabel.Bounds(); st.W != 1600-2*isoGap {
+		t.Fatalf("status line width %d, want %d", st.W, 1600-2*isoGap)
+	}
+	// The canvases still bottom out above the status line.
+	if ba.Y+ba.H >= s.statusLabel.Bounds().Y {
+		t.Fatal("canvas overruns the status line after resize")
+	}
+
+	// Below the floor: clamped to the minimum workable surface.
+	rw, rh = s.Resize(100, 100)
+	if rw != isoMinSurfaceW || rh != isoMinSurfaceH {
+		t.Fatalf("Resize(100,100) = %dx%d, want the floor %dx%d", rw, rh, isoMinSurfaceW, isoMinSurfaceH)
+	}
+	if s.diaA.Bounds().W <= 0 || s.diaA.Bounds().H <= 0 {
+		t.Fatal("a canvas collapsed at the minimum surface")
 	}
 }
