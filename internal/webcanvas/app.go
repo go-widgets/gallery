@@ -107,6 +107,70 @@ type Resizer interface {
 	Resize(w, h int) (rw, rh int)
 }
 
+// Scroller is an optional companion to [App]: a scene with a scrollable region
+// (a docked list, an icon palette, an overflowing panel) implements it, and [Run]
+// installs a "wheel" listener that translates the browser's WheelEvent into
+// toolkit scroll ROWS and routes them — with the canvas-local pointer position, so
+// the scene can hit-test which region the wheel is over — through Scroll. A scene
+// that omits it installs no wheel listener, so the page keeps its default wheel
+// behaviour and every existing demo (the widget gallery) is unchanged.
+//
+// dx / dy are the horizontal / vertical scroll amounts in toolkit ROWS (already
+// normalised from the event's deltaMode by [scrollRows]): positive dy scrolls
+// down / forward, positive dx scrolls right. A scene typically forwards them to
+// the widget under (x, y) as a [toolkit.Event] of kind EventScroll (Delta = dy,
+// DeltaX = dx), which scrollable widgets clamp at both ends. Scroll reports
+// whether the scene changed and therefore needs a repaint.
+type Scroller interface {
+	// Scroll delivers a wheel / trackpad scroll of dy vertical and dx horizontal
+	// ROWS at canvas-local (x, y), and reports whether the scene needs a repaint.
+	Scroll(x, y, dx, dy int) (repaint bool)
+}
+
+// A browser WheelEvent reports its delta in one of three units, named by its
+// deltaMode: pixels (0, the default a mouse notch and a trackpad use), lines (1,
+// some Firefox setups) or pages (2). [scrollRows] normalises each to toolkit rows.
+const (
+	deltaModeLine = 1
+	deltaModePage = 2
+
+	// wheelLinePixels is the nominal CSS px one scroll ROW spans when a wheel event
+	// reports its delta in pixels — a typical text-line height. A one-notch wheel
+	// (~100 px in Chrome) then moves a couple of rows; a slow trackpad glide fewer.
+	wheelLinePixels = 40
+	// wheelPageRows is how many rows one page-mode (deltaMode 2) unit scrolls.
+	wheelPageRows = 10
+)
+
+// scrollRows converts one axis of a browser WheelEvent — delta, in the unit named
+// by mode — into toolkit scroll ROWS, the unit [toolkit.Event.Delta] carries. A
+// pixel delta (mode 0, the default) is divided by a nominal line height; a line
+// delta (mode 1) passes straight through; a page delta (mode 2) is multiplied out.
+// The sign is preserved and any nonzero delta yields at least one row in its
+// direction, so a small trackpad nudge still scrolls rather than rounding away to
+// nothing; a zero delta is zero rows.
+func scrollRows(delta float64, mode int) int {
+	if delta == 0 {
+		return 0
+	}
+	var rows float64
+	switch mode {
+	case deltaModeLine:
+		rows = delta
+	case deltaModePage:
+		rows = delta * wheelPageRows
+	default: // pixel mode (0) and any unknown mode
+		rows = delta / wheelLinePixels
+	}
+	if n := int(rows); n != 0 { // int() truncates toward zero
+		return n
+	}
+	if delta > 0 {
+		return 1
+	}
+	return -1
+}
+
 // PanicReporter logs a handler panic the [guard] net recovered. The wasm host
 // swaps in a console.error reporter carrying the JS stack; the default writes to
 // standard error so a native run — and the recover test — still surfaces it. It
