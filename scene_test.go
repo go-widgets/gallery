@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
@@ -1017,4 +1018,137 @@ func TestAllChartsHover(t *testing.T) {
 	}
 	// A draw after arming exercises the hover-highlight render paths.
 	s.draw(newSurface())
+}
+
+// --- wheel scroll (webcanvas.Scroller) ------------------------------------
+
+// renderFrame paints the whole scene into a fresh buffer and returns it, so a
+// test can compare two frames byte-for-byte and prove a scroll moved pixels.
+func renderFrame(s *state) []byte {
+	surf := newSurface()
+	s.draw(surf)
+	return surf
+}
+
+// TestWheelScrollsListBox proves a wheel over the (overflowing) ListBox scrolls
+// its visible window through the toolkit's shared EventScroll: the ScrollRow
+// offset advances, the rendered pixels change, and a wheel-up clamps back to the
+// top. This is the core proof the gallery scene now routes the wheel.
+func TestWheelScrollsListBox(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	// The list must overflow its viewport, or there is nothing to scroll.
+	if s.listBox.ScrollRow().Get() != 0 {
+		t.Fatalf("ListBox should start at the top, got %d", s.listBox.ScrollRow().Get())
+	}
+	lb := s.listBox.Bounds()
+	cx, cy := lb.X+lb.W/2, lb.Y+lb.H/2
+
+	top := renderFrame(s)
+	if !s.handleScroll(cx, cy, 0, 5) { // wheel down five rows
+		t.Fatal("wheel over the ListBox reported no repaint")
+	}
+	if got := s.listBox.ScrollRow().Get(); got != 5 {
+		t.Fatalf("ListBox ScrollRow = %d after wheeling down 5, want 5", got)
+	}
+	scrolled := renderFrame(s)
+	if bytes.Equal(top, scrolled) {
+		t.Fatal("wheel over the ListBox did not change the rendered frame")
+	}
+
+	if !s.handleScroll(cx, cy, 0, -100) { // wheel far up: clamps to the top
+		t.Fatal("wheel-up over the ListBox reported no repaint")
+	}
+	if got := s.listBox.ScrollRow().Get(); got != 0 {
+		t.Fatalf("ListBox ScrollRow = %d after clamping up, want 0", got)
+	}
+	if !bytes.Equal(top, renderFrame(s)) {
+		t.Fatal("wheel-up did not return the ListBox to its top offset")
+	}
+}
+
+// TestWheelOverNonScrollableIsNoOp proves a wheel over a non-scrollable widget
+// (the Button) and over empty space is a clean no-op — Scroll returns false so
+// the host skips a useless repaint and nothing in the scene changes.
+func TestWheelOverNonScrollableIsNoOp(t *testing.T) {
+	s := newState(surfaceW, surfaceH)
+	before := renderFrame(s)
+
+	b := s.button.Bounds()
+	if s.handleScroll(b.X+b.W/2, b.Y+b.H/2, 0, 5) {
+		t.Fatal("wheel over the Button should be a no-op")
+	}
+	// Empty space above the menu bar (0,0) is not any widget.
+	if s.handleScroll(0, 0, 0, 5) {
+		t.Fatal("wheel over empty space should be a no-op")
+	}
+	if !bytes.Equal(before, renderFrame(s)) {
+		t.Fatal("a no-op wheel must not change the frame")
+	}
+}
+
+// TestWheelSwallowedWhileOverlayOpen proves the wheel is ignored while a
+// full-surface modal overlay is open (the command palette or the right-click
+// edit menu), so it never scrolls the hidden dashboard underneath.
+func TestWheelSwallowedWhileOverlayOpen(t *testing.T) {
+	lbCenter := func(s *state) (int, int) {
+		lb := s.listBox.Bounds()
+		return lb.X + lb.W/2, lb.Y + lb.H/2
+	}
+
+	// Command palette open.
+	s := newState(surfaceW, surfaceH)
+	s.cmdPalette.Open()
+	cx, cy := lbCenter(s)
+	if s.handleScroll(cx, cy, 0, 5) {
+		t.Fatal("wheel should be swallowed while the command palette is open")
+	}
+	if s.listBox.ScrollRow().Get() != 0 {
+		t.Fatal("the hidden ListBox must not scroll under the command palette")
+	}
+
+	// Right-click edit menu open (rebuild + open its Menu via the list menu path).
+	s = newState(surfaceW, surfaceH)
+	s.ctxMenu.Menu = s.listMenu(s.listBox, 0)
+	s.ctxMenu.Open().Set(true)
+	cx, cy = lbCenter(s)
+	if s.handleScroll(cx, cy, 0, 5) {
+		t.Fatal("wheel should be swallowed while the edit menu is open")
+	}
+	if s.listBox.ScrollRow().Get() != 0 {
+		t.Fatal("the hidden ListBox must not scroll under the edit menu")
+	}
+}
+
+// TestWheelScrollCapture writes a PNG of the gallery with its ListBox wheel-
+// scrolled, so the scroll is visually inspectable. It dumps into GALLERY_DUMP_PNG
+// when set (the developer inspection seam), else a temp dir the test cleans up,
+// and asserts the file decodes at the surface size. Runs unconditionally so the
+// dump path stays covered.
+func TestWheelScrollCapture(t *testing.T) {
+	dir := os.Getenv("GALLERY_DUMP_PNG")
+	if dir == "" {
+		dir = t.TempDir()
+	} else if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir dump dir: %v", err)
+	}
+	s := newState(surfaceW, surfaceH)
+	lb := s.listBox.Bounds()
+	s.handleScroll(lb.X+lb.W/2, lb.Y+lb.H/2, 0, 6) // slide a lower slice into view
+
+	path := filepath.Join(dir, "gallery-wheel-scrolled.png")
+	if err := encodeSurfaceAsPNG(renderFrame(s), path); err != nil {
+		t.Fatalf("encode %s: %v", path, err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	f.Close()
+	if err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	if cfg.Width != surfaceW || cfg.Height != surfaceH {
+		t.Fatalf("%s is %dx%d, want %dx%d", path, cfg.Width, cfg.Height, surfaceW, surfaceH)
+	}
 }
