@@ -47,6 +47,12 @@ func TestGalleryAppForwards(t *testing.T) {
 	cmp("Context", g.Context(surfaceW/2, surfaceH/2), newState(surfaceW, surfaceH).handleContext(surfaceW/2, surfaceH/2))
 	cmp("Char", g.Char("a"), newState(surfaceW, surfaceH).handleChar("a"))
 	cmp("KeyDown", g.KeyDown("Enter"), newState(surfaceW, surfaceH).handleKeyDown("Enter"))
+	// Scroll forwards to handleScroll: a wheel over the ListBox scrolls it (true),
+	// a wheel over empty space is a no-op (false) — both compared to a fresh state.
+	lb := newState(surfaceW, surfaceH).listBox.Bounds()
+	cmp("Scroll/list", g.Scroll(lb.X+lb.W/2, lb.Y+lb.H/2, 0, 3),
+		newState(surfaceW, surfaceH).handleScroll(lb.X+lb.W/2, lb.Y+lb.H/2, 0, 3))
+	cmp("Scroll/empty", g.Scroll(0, 0, 0, 3), newState(surfaceW, surfaceH).handleScroll(0, 0, 0, 3))
 
 	// Tick decrements the toast life; just exercising it must not panic and
 	// keeps the wrapped state usable.
@@ -60,5 +66,8 @@ func TestGalleryAppSatisfiesContracts(t *testing.T) {
 	var app webcanvas.App = newGalleryApp()
 	if _, ok := app.(webcanvas.Ticker); !ok {
 		t.Fatal("galleryApp does not satisfy webcanvas.Ticker")
+	}
+	if _, ok := app.(webcanvas.Scroller); !ok {
+		t.Fatal("galleryApp does not satisfy webcanvas.Scroller")
 	}
 }
