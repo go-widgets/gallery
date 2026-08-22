@@ -46,11 +46,20 @@ func (g galleryApp) Char(s string) bool { return g.s.handleChar(s) }
 // KeyDown forwards a named/modified key to the focused widget.
 func (g galleryApp) KeyDown(s string) bool { return g.s.handleKeyDown(s) }
 
+// Scroll forwards a wheel / trackpad scroll (dy vertical, dx horizontal ROWS)
+// at (x, y) to the scrollable widget under the pointer. Implementing
+// [webcanvas.Scroller] is what makes the harness install the wheel listener for
+// the gallery, so the mouse wheel scrolls the dashboard's ListBoxes, tables and
+// trees instead of the page.
+func (g galleryApp) Scroll(x, y, dx, dy int) bool { return g.s.handleScroll(x, y, dx, dy) }
+
 // Tick advances the notification countdown one frame.
 func (g galleryApp) Tick() { g.s.tick() }
 
-// Compile-time proof the adapter satisfies both contracts on the native build.
+// Compile-time proof the adapter satisfies every contract on the native build:
+// the base App, the Ticker (toast countdown) and the Scroller (wheel routing).
 var (
-	_ webcanvas.App    = galleryApp{}
-	_ webcanvas.Ticker = galleryApp{}
+	_ webcanvas.App      = galleryApp{}
+	_ webcanvas.Ticker   = galleryApp{}
+	_ webcanvas.Scroller = galleryApp{}
 )

@@ -251,6 +251,14 @@ type state struct {
 	// in draw-order (matches the visual order the user sees) so hit-
 	// testing prefers the top-most match.
 	clickables []toolkit.Widget
+
+	// scrollables is the subset of dashboard widgets that consume a wheel
+	// EventScroll — the scrollable content families (Notebook tab strips,
+	// TextView, the two ListBoxes, TreeView, the Tables and the TreeTable).
+	// handleScroll hit-tests this list so a wheel over one of them scrolls its
+	// content and a wheel over any other widget (a Button, a chart) is a clean
+	// no-op. Enumerated in newState alongside clickables.
+	scrollables []toolkit.Widget
 }
 
 // frameChromeH is the vertical space a titled Frame adds around its child:
@@ -500,7 +508,15 @@ func newState(w, _ int) *state {
 	s.colorChoose = toolkit.NewColorChooser(toolkit.RGB(0x0d, 0x94, 0x88))
 
 	// --- Column C widgets — CONSTRUCTION ONLY (placement owned by colC) ---
-	s.listBox = toolkit.NewListBox([]string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"})
+	// More rows than the section's viewport can show, so the list OVERFLOWS its
+	// box: a wheel over it (or the Arrow/Page keys) scrolls the visible window
+	// through the toolkit's native ListBox scroll — the showcase for the scene's
+	// wheel routing (see handleScroll).
+	s.listBox = toolkit.NewListBox([]string{
+		"apple", "banana", "cherry", "date", "elderberry", "fig", "grape",
+		"honeydew", "kiwi", "lemon", "mango", "nectarine", "orange", "papaya",
+		"quince", "raspberry", "strawberry", "tangerine",
+	})
 
 	s.tree = toolkit.NewTreeView(&toolkit.TreeNode{
 		Label: "/", Expanded: true, Children: []*toolkit.TreeNode{
@@ -1050,6 +1066,20 @@ func newState(w, _ int) *state {
 		s.agendaSwitcher, s.calSidebar, s.agenda, s.kanban, s.gantt,
 	}
 
+	// --- wheel-scroll routing table -------------------------------------
+	//
+	// The scrollable content families, hit-tested by handleScroll so a wheel /
+	// trackpad gesture over one scrolls its content through the toolkit's own
+	// EventScroll (the shared mechanism the wheel drives everywhere). A wheel
+	// anywhere else is a no-op. Enumerated top-most-first, same as clickables.
+	s.scrollables = []toolkit.Widget{
+		s.notebook, s.notebookSide,
+		s.textView,
+		s.listBox, s.dataView,
+		s.tree,
+		s.table, s.gridEdit, s.treeTable,
+	}
+
 	return s
 }
 
@@ -1203,6 +1233,32 @@ func (s *state) handleClick(x, y int) bool {
 	}
 	s.dragTarget, s.keyTarget = nil, nil
 	return true
+}
+
+// handleScroll routes a wheel / trackpad scroll of dy vertical and dx
+// horizontal ROWS at surface (x, y) to the scrollable widget under the pointer,
+// as a toolkit EventScroll (Delta = dy, DeltaX = dx) in that widget's local
+// coordinates — the same shared mechanism the wheel drives everywhere in the
+// toolkit, which every scrollable widget clamps at both ends. dy/dx arrive
+// already normalised to toolkit rows by the webcanvas harness (scrollRows), so
+// this method never touches the raw browser deltaMode.
+//
+// A wheel over a non-scrollable widget or empty space is a clean no-op
+// (returns false → no repaint). While a full-surface modal overlay is open
+// (the command palette or the right-click edit menu), the wheel is swallowed so
+// it never scrolls the hidden dashboard underneath.
+func (s *state) handleScroll(x, y, dx, dy int) bool {
+	if s.cmdPalette.Visible().Get() || s.ctxMenu.Open().Get() {
+		return false
+	}
+	for _, w := range s.scrollables {
+		r := w.Bounds()
+		if inside(x, y, r) {
+			w.OnEvent(toolkit.Event{Kind: toolkit.EventScroll, X: x - r.X, Y: y - r.Y, Delta: dy, DeltaX: dx})
+			return true
+		}
+	}
+	return false
 }
 
 // handleMove drives pointer motion: a captured drag first, else a hover check
