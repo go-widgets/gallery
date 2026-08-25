@@ -16,7 +16,7 @@
 
 package main
 
-import "github.com/go-widgets/gallery/internal/webcanvas"
+import "github.com/go-widgets/webcanvas"
 
 func main() {
 	webcanvas.Run("screen", newGalleryApp())
