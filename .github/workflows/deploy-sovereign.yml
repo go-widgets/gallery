@@ -1,0 +1,96 @@
+# Sovereign brotli deploy — ADDITIVE mirror alongside GitHub Pages.
+#
+# Builds the same two wasm demos as pages.yml, generates brotli + gzip
+# sidecars, and rsyncs the site to our self-hosted Caddy VM, which serves
+# the .wasm with native Content-Encoding: br (~24% smaller wire than Pages
+# gzip, decoded natively by the browser — no client-side decoder).
+#
+# INERT until configured: the job runs only when the repo variable
+# SOVEREIGN_DEPLOY_ENABLED == 'true'. See deploy/README.md for the one-time
+# setup (DNS A record, deploy key/secret, Caddyfile block).
+name: deploy-sovereign
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: sovereign-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.SOVEREIGN_DEPLOY_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          check-latest: true
+          cache: true
+
+      - name: Build gallery.wasm
+        env: { GOOS: js, GOARCH: wasm, GOWORK: "off", CGO_ENABLED: "0" }
+        run: go build -o gallery.wasm .
+
+      - name: Build iso.wasm (interactive isometric editor)
+        env: { GOOS: js, GOARCH: wasm, GOWORK: "off", CGO_ENABLED: "0" }
+        run: go build -o iso.wasm ./iso
+
+      - name: Copy wasm_exec.js from GOROOT
+        run: |
+          root="$(go env GOROOT)"
+          if [ -f "$root/lib/wasm/wasm_exec.js" ]; then
+            cp "$root/lib/wasm/wasm_exec.js" ./wasm_exec.js
+          else
+            cp "$root/misc/wasm/wasm_exec.js" ./wasm_exec.js
+          fi
+
+      - name: Stage site + stamp decompressed sizes
+        run: |
+          mkdir -p site
+          cp index.html iso.html gallery.wasm iso.wasm wasm_exec.js site/
+          # Same stamping as pages.yml: the loader's progress bar is driven off
+          # the DECOMPRESSED total (Caddy serves the wasm brotli/gzip-encoded, so
+          # Content-Length is the compressed length while the stream reader yields
+          # decompressed bytes). Stamp each page with its wasm's on-disk length.
+          gbytes=$(stat -c%s site/gallery.wasm)
+          ibytes=$(stat -c%s site/iso.wasm)
+          sed -i "s/__WASM_BYTES__/${gbytes}/g" site/index.html
+          sed -i "s/__WASM_BYTES__/${ibytes}/g" site/iso.html
+          echo "stamped: gallery.wasm=${gbytes} iso.wasm=${ibytes}"
+
+      - name: Pre-compress wasm (brotli -11 + gzip -9 sidecars)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli
+          for w in site/gallery.wasm site/iso.wasm; do
+            brotli -q 11 -k -f "$w"          # -> $w.br  (Caddy serves with Content-Encoding: br)
+            gzip   -9   -k -f "$w"           # -> $w.gz  (fallback for clients without br)
+            printf '  %s  raw=%s  br=%s  gz=%s\n' "$w" \
+              "$(stat -c%s "$w")" "$(stat -c%s "$w.br")" "$(stat -c%s "$w.gz")"
+          done
+
+      - name: Deploy to sovereign Caddy host
+        env:
+          KEY: ${{ secrets.SOVEREIGN_DEPLOY_KEY }}
+          HOST: ${{ vars.SOVEREIGN_DEPLOY_HOST }}
+          USER: ${{ vars.SOVEREIGN_DEPLOY_USER }}
+          DEST: ${{ vars.SOVEREIGN_DEPLOY_PATH }}
+          KNOWN: ${{ vars.SOVEREIGN_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$KEY" && test -n "$HOST" && test -n "$USER" && test -n "$DEST" || {
+            echo "::error::SOVEREIGN_DEPLOY_* not fully set — see deploy/README.md"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          else ssh-keyscan -H "$HOST" > ~/.ssh/known_hosts 2>/dev/null; fi
+          chmod 644 ~/.ssh/known_hosts
+          # --delete keeps the remote a mirror of site/; sidecars go too.
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            site/ "${USER}@${HOST}:${DEST}/"
+          rm -f ~/.ssh/deploy_key
+          echo "deployed to ${USER}@${HOST}:${DEST}"

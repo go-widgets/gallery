@@ -1,0 +1,31 @@
+# Sovereign brotli host for the go-widgets wasm demos.
+# Add this block to /etc/caddy/Caddyfile on the Forgejo VM (157.136.250.7),
+# then: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Replace the hostname with the DNS name you point (A record) at the VM.
+# Caddy obtains the TLS certificate from Let's Encrypt automatically.
+
+widgets.mesocentre.plateau-de-saclay.net {
+	root * /var/www/gowidgets-gallery
+
+	# Serve the .wasm.br / .wasm.gz sidecars the deploy workflow produced,
+	# with native Content-Encoding: br (or gzip) — the browser decodes them
+	# transparently, no client-side decoder. ~2.77 MB on the wire vs 3.68 MB
+	# under Pages' gzip (-24%).
+	file_server {
+		precompressed br gzip
+	}
+
+	# gzip anything not pre-compressed (the small HTML/JS).
+	encode gzip
+
+	# Correct type + long cache for the immutable, content-hashed wasm.
+	@wasm path *.wasm
+	header @wasm Content-Type "application/wasm"
+	header @wasm Cache-Control "public, max-age=31536000, immutable"
+
+	# HTML must not be cached hard (it carries the stamped __WASM_BYTES__ and
+	# links the current wasm); let it revalidate.
+	@html path *.html /
+	header @html Cache-Control "no-cache"
+}
