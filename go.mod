@@ -10,6 +10,7 @@ require (
 	github.com/go-widgets/mvvm v0.8.0
 	github.com/go-widgets/painter v0.11.0
 	github.com/go-widgets/toolkit v0.248.0
+	github.com/go-widgets/webcanvas v0.1.0
 )
 
 require (

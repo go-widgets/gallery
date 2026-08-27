@@ -4,7 +4,7 @@
 
 package main
 
-import "github.com/go-widgets/gallery/internal/webcanvas"
+import "github.com/go-widgets/webcanvas"
 
 // galleryApp adapts the gallery's *state to the shared [webcanvas.App]
 // interface, so the DOM harness in internal/webcanvas can drive it without any
