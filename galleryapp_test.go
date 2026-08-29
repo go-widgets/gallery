@@ -7,7 +7,7 @@ package main
 import (
 	"testing"
 
-	"github.com/go-widgets/gallery/internal/webcanvas"
+	"github.com/go-widgets/webcanvas"
 )
 
 // TestGalleryAppForwards drives every galleryApp adapter method and checks it

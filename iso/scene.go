@@ -13,7 +13,7 @@
 //     and a node is created at the exact ground tile under the drop (undoable);
 //     picking an icon also arms click-to-place through an mvvm.Observable binding;
 //   - a real toolbar built from [toolkit.ButtonGroup]s of icon+label buttons
-//     (go-iconoir glyphs, themed): a Modes group (Select / Node / Connect / Zone /
+//     (Iconoir glyphs, themed): a Modes group (Select / Node / Connect / Zone /
 //     Text), an Edit group (Undo / Redo / Delete), a View group (RotateCCW /
 //     RotateCW / Zoom+ / Zoom- / Layer) and a Collaborate group (Sync / Reset).
 //     Left-drag empty ground pans; right-click opens the widget's own menu;
@@ -53,7 +53,6 @@ import (
 	"github.com/go-gfx/gfx/geometry"
 	"github.com/go-gfx/gfx/iso"
 	"github.com/go-gfx/gfx/raster"
-	"github.com/go-iconoir/iconoir"
 	"github.com/go-widgets/isoicons"
 	"github.com/go-widgets/mvvm"
 	"github.com/go-widgets/painter"
@@ -102,7 +101,7 @@ const (
 )
 
 // Toolbar geometry. Uniform icon+label cells clustered into ButtonGroups laid
-// left-to-right with a small gap; each cell carries a go-iconoir glyph beside its
+// left-to-right with a small gap; each cell carries an Iconoir glyph beside its
 // text label.
 const (
 	tbY        = 6
@@ -207,7 +206,7 @@ const (
 )
 
 // toolCmd is one toolbar cell: a stable key (for the test to fire it by name), a
-// go-iconoir glyph name, a text label and its click handler.
+// Iconoir glyph name, a text label and its click handler.
 type toolCmd struct {
 	key   string
 	icon  string
@@ -407,7 +406,7 @@ func (s *isoScene) toolbarSpec() []toolGroupSpec {
 }
 
 // buildToolbar assembles the four ButtonGroups once. Each button carries a
-// go-iconoir glyph and its text label, drawn through the button's Icon seam so
+// Iconoir glyph and its text label, drawn through the button's Icon seam so
 // the glyph tracks the pressed / disabled tint; ButtonGroup owns the shared
 // rounded chrome and inter-member dividers.
 func (s *isoScene) buildToolbar() {
@@ -428,16 +427,16 @@ func (s *isoScene) buildToolbar() {
 	}
 }
 
-// iconLabelPainter returns a [toolkit.Button.Icon] closure that paints a
-// go-iconoir glyph in a small left square and the text label to its right, both
-// in the button's current ink (so they follow the pressed / disabled tint). The
-// glyph is fetched once at build time; its name is a compile-time constant proven
-// present in the vendored go-iconoir set.
+// iconLabelPainter returns a [toolkit.Button.Icon] closure that paints an Iconoir
+// glyph in a small left square and the text label to its right, both in the
+// button's current ink (so they follow the pressed / disabled tint). The glyph is
+// drawn through the toolkit's [toolkit.DrawIconoir] seam (go-icons/iconoir data,
+// rasterised over go-gfx); name is a compile-time constant proven present in the
+// Iconoir set.
 func iconLabelPainter(name, label string) func(p painter.Painter, r toolkit.Rect, ink toolkit.RGBA) {
-	ic := iconoir.MustGet(name)
 	return func(p painter.Painter, r toolkit.Rect, ink toolkit.RGBA) {
 		gy := r.Y + (r.H-tbIconSz)/2
-		iconoir.DrawIcon(p, toolkit.Rect{X: r.X + tbIconPad, Y: gy, W: tbIconSz, H: tbIconSz}, ic, ink)
+		toolkit.DrawIconoir(p, toolkit.Rect{X: r.X + tbIconPad, Y: gy, W: tbIconSz, H: tbIconSz}, name, ink)
 		lx := r.X + tbIconPad + tbIconSz + tbTextPad
 		ly := r.Y + (r.H-toolkit.GlyphHeight())/2
 		toolkit.DrawText(p, lx, ly, label, ink)
