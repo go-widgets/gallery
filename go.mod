@@ -7,7 +7,7 @@ require (
 	github.com/go-gfx/gfx v0.11.0
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.8.0
-	github.com/go-widgets/painter v0.11.0
+	github.com/go-widgets/painter v0.12.0
 	github.com/go-widgets/toolkit v0.284.0
 	github.com/go-widgets/webcanvas v0.1.0
 )
