@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/go-crdt/crdt v0.31.0
-	github.com/go-gfx/gfx v0.11.0
+	github.com/go-gfx/gfx v0.16.0
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.8.0
 	github.com/go-widgets/painter v0.11.0
