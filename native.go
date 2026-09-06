@@ -51,6 +51,7 @@ var galleryControls = []galleryControl{
 	{name: "Link", kind: toolkit.NativeLink, text: "a hyperlink"},
 	{name: "Date", kind: toolkit.NativeDate, text: "2026-09-01"},
 	{name: "Color", kind: toolkit.NativeColor, text: "#3366cc"},
+	{name: "List", kind: toolkit.NativeList, items: []string{"First", "Second", "Third", "Fourth"}, num: 1},
 }
 
 // nativeControls lays the showcased controls out in two columns, each row a
@@ -66,10 +67,14 @@ func nativeControls() []toolkit.NativeControl {
 			Kind: toolkit.NativeLabel, Key: "cap:" + s.name, Visible: true,
 			Text: s.name + ":", Rect: toolkit.Rect{X: x, Y: y + 4, W: labelW, H: ctlH},
 		})
+		ch := ctlH
+		if s.kind == toolkit.NativeList {
+			ch = 120 // a list needs room for several rows
+		}
 		out = append(out, toolkit.NativeControl{
 			Kind: s.kind, Key: "ctl:" + s.name, Visible: true,
 			Text: s.text, On: s.on, Number: s.num, Min: s.min, Max: s.max, Items: s.items,
-			Rect: toolkit.Rect{X: x + labelW, Y: y, W: ctlW, H: ctlH},
+			Rect: toolkit.Rect{X: x + labelW, Y: y, W: ctlW, H: ch},
 		})
 	}
 	return out

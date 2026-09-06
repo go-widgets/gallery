@@ -18,8 +18,8 @@ github.com/go-freedesktop/x11 v0.2.0 h1:qHvov5jn7GG4QxeealqRJVj72/MjR5qi2IXqyD7N
 github.com/go-freedesktop/x11 v0.2.0/go.mod h1:a+Fma9oOlsagw0CJKe+VHYxIl5/PzPSmlCVaYCtUSYA=
 github.com/go-gfx/gfx v0.19.0 h1:nA2Eg8Aq2kytR5Hrm/eQ6618w4vT0+Ao8BMZiuYh84c=
 github.com/go-gfx/gfx v0.19.0/go.mod h1:VAK6hgCgkhT3j3ek2K7G8zDfkCPD3RCF45UbcRlCV8Q=
-github.com/go-gtk/gtk4 v0.5.0 h1:97/WDULZ3cVIYldSIPT9FV7GBkEf4cOMunF7nsIODNk=
-github.com/go-gtk/gtk4 v0.5.0/go.mod h1:jjaA29sFQTpy2D3N+FrnxMFZq07mG48ahgQoEEECpPA=
+github.com/go-gtk/gtk4 v0.6.0 h1:piXUsvHo1FWJtgEz5ogowyvXlMskchAbiryeNJPKEmw=
+github.com/go-gtk/gtk4 v0.6.0/go.mod h1:jjaA29sFQTpy2D3N+FrnxMFZq07mG48ahgQoEEECpPA=
 github.com/go-icons/iconoir v0.2.0 h1:I5AnDEIPgYfawTmwzemDRJjlYCUbFHuS8GJXrjADhXc=
 github.com/go-icons/iconoir v0.2.0/go.mod h1:Td/M2vy4xdVv4aOudAskV0nXR9Wv0MlhWvyRIzPBz5U=
 github.com/go-images/images v0.0.0-20260831115433-23d959d868e3 h1:SinmtXWpA4a30ZQ5A9QI9YrsYvytmLGeTRVbXqqEezw=
@@ -58,8 +58,8 @@ github.com/go-widgets/toolkit v0.307.0 h1:4qqLLJjEK6uoYdQTDt90Y70ufgTrlr7YMT73eW
 github.com/go-widgets/toolkit v0.307.0/go.mod h1:tpn/Pcd+kra6UnIe8LPwaZWYQaCvvatYXrbuMJyoBfc=
 github.com/go-widgets/webcanvas v0.1.0 h1:fSGllghHlFZSC7CBb1oetj/PKR/S3ds/piDrpr0Kmg0=
 github.com/go-widgets/webcanvas v0.1.0/go.mod h1:UAoPu9dO6ZzcFFwQbVeW4Jm4X67XFKVJab9A6qWwsMM=
-github.com/go-widgets/window v0.70.0 h1:ix9TAmEmCt+PvsYscrZiQm20l2KcT65QnQZ/U3Yav/4=
-github.com/go-widgets/window v0.70.0/go.mod h1:DGE3u3flDSWvDZiZhwqLz3IEV9kKq0Tjj8cdFD9CrQo=
+github.com/go-widgets/window v0.73.0 h1:b8E/z2sytRPNpRt2lt80xjwcPHIjarF1QABGBjVs454=
+github.com/go-widgets/window v0.73.0/go.mod h1:96cemkkeQgHVoBGzWLyPa/1HwCF5LETehCb99+7LsLY=
 github.com/godbus/dbus/v5 v5.2.2 h1:TUR3TgtSVDmjiXOgAAyaZbYmIeP3DPkld3jgKGV8mXQ=
 github.com/godbus/dbus/v5 v5.2.2/go.mod h1:3AAv2+hPq5rdnr5txxxRwiGjPXamgoIHgz9FPBfOp3c=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
