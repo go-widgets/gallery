@@ -50,3 +50,8 @@ jobs:
           GOOS: js
           GOARCH: wasm
         run: go build -o /tmp/gallery.wasm .
+
+      - name: Native gallery build smoke (all NativeKinds over go-widgets/window)
+        env:
+          CGO_ENABLED: "0"
+        run: go build -tags gallerynative -o /tmp/gallery-native .

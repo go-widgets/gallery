@@ -23,6 +23,25 @@ SharedArrayBuffer, no COOP/COEP, no server-side dep. That makes it
 easy to iframe from any static host (`python3 -m http.server`, GitHub
 Pages, S3, ...).
 
+## Native controls gallery
+
+The wasm page above shows the toolkit's **drawn** widgets. Its native
+mirror shows the same widget set as the **platform's own controls** —
+one `toolkit.NativeControl` descriptor per `NativeKind`, hosted by
+`go-widgets/window`'s cocoa / win32 / gtk back-end (real
+`NSButton`/`GtkEntry`/… over the framebuffer), pure Go, `CGO_ENABLED=0`.
+
+```text
+go build -tags gallerynative -o gallery-native .
+./gallery-native                     # macOS / Windows
+GO_WIDGETS_GTK=1 ./gallery-native    # Linux (GTK4-hosted back-end)
+```
+
+`native.go` builds the descriptor grid (tag-less, 100%-tested);
+`native_main.go` (behind the `gallerynative` tag, so the wasm build and
+the coverage-gated tests never pull in the windowing stack) opens the
+window and runs it.
+
 ## Layout
 
 `scene.go` composes widgets from the toolkit onto a **960-wide**
