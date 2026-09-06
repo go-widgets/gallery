@@ -3,12 +3,12 @@ module github.com/go-widgets/gallery
 go 1.26.4
 
 require (
-	github.com/go-crdt/crdt v0.42.0
+	github.com/go-crdt/crdt v0.46.0
 	github.com/go-gfx/gfx v0.19.0
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.9.0
-	github.com/go-widgets/painter v0.12.0
-	github.com/go-widgets/toolkit v0.306.0
+	github.com/go-widgets/painter v0.13.0
+	github.com/go-widgets/toolkit v0.307.0
 	github.com/go-widgets/webcanvas v0.1.0
 	github.com/go-widgets/window v0.70.0
 )
