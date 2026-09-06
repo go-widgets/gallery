@@ -12,8 +12,8 @@ github.com/ebitengine/purego v0.11.0 h1:jhp/D+Nyv7UUW8HAcmcjt2N2rYrYi9m3SL21k0Ua
 github.com/ebitengine/purego v0.11.0/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/go-crdt/collab v0.40.0 h1:/LfqtwoiQKBHOZMoF9NfQj19GQRkXFzfn3XTDry4o5I=
 github.com/go-crdt/collab v0.40.0/go.mod h1:524ptwB8GQti5cZwMsaNaG2nQv+4XykUnE35Z6lN4f0=
-github.com/go-crdt/crdt v0.42.0 h1:L2+yvKjs3RgagncbU6JAkBnRz6wVylNynkzntL5pKpQ=
-github.com/go-crdt/crdt v0.42.0/go.mod h1:vbfvns9B9FUaMi2sPKzMYttKmbxfgO7EK3Yu82SrlYw=
+github.com/go-crdt/crdt v0.46.0 h1:Ppup+K/zLvM1trmBz83ENvEVcOTi3fFGnihvJMRL2yc=
+github.com/go-crdt/crdt v0.46.0/go.mod h1:vbfvns9B9FUaMi2sPKzMYttKmbxfgO7EK3Yu82SrlYw=
 github.com/go-freedesktop/x11 v0.2.0 h1:qHvov5jn7GG4QxeealqRJVj72/MjR5qi2IXqyD7N02A=
 github.com/go-freedesktop/x11 v0.2.0/go.mod h1:a+Fma9oOlsagw0CJKe+VHYxIl5/PzPSmlCVaYCtUSYA=
 github.com/go-gfx/gfx v0.19.0 h1:nA2Eg8Aq2kytR5Hrm/eQ6618w4vT0+Ao8BMZiuYh84c=
@@ -52,10 +52,10 @@ github.com/go-widgets/isoicons v0.1.0 h1:j4rwOVN9VIGqoT7w8O06x3TmqZNDGIqsk9IDIxm
 github.com/go-widgets/isoicons v0.1.0/go.mod h1:hq3O6KyyNI8y7aPoMdCRuWoj7t8LINuMvgSr1EPsaWE=
 github.com/go-widgets/mvvm v0.9.0 h1:NwW/hAAsJUGlxmNt0ErQ7fUrud3w5Ys1RWm7hVugdJs=
 github.com/go-widgets/mvvm v0.9.0/go.mod h1:1cUYVpDei59Ka7W3pMD1FWksBmBXfPnbPWHzBAJ/ebA=
-github.com/go-widgets/painter v0.12.0 h1:gMqTVbIbGSKmaE28NKsbbKdNIk2drupNMNuLjFP6T6I=
-github.com/go-widgets/painter v0.12.0/go.mod h1:IPRLqdUJuJX8sfuHeYLZCzjoLvA0ApbOlyIAVmguJDQ=
-github.com/go-widgets/toolkit v0.306.0 h1:QKNFcxLK2ZwI+TxMCXZwwRBWqtNrc+tnI0fktXuuQLw=
-github.com/go-widgets/toolkit v0.306.0/go.mod h1:tpn/Pcd+kra6UnIe8LPwaZWYQaCvvatYXrbuMJyoBfc=
+github.com/go-widgets/painter v0.13.0 h1:xBPbopFuYfeDVbQKUKviU6HnP2mAhztJ+BpasahlJLU=
+github.com/go-widgets/painter v0.13.0/go.mod h1:IPRLqdUJuJX8sfuHeYLZCzjoLvA0ApbOlyIAVmguJDQ=
+github.com/go-widgets/toolkit v0.307.0 h1:4qqLLJjEK6uoYdQTDt90Y70ufgTrlr7YMT73eW7GRVc=
+github.com/go-widgets/toolkit v0.307.0/go.mod h1:tpn/Pcd+kra6UnIe8LPwaZWYQaCvvatYXrbuMJyoBfc=
 github.com/go-widgets/webcanvas v0.1.0 h1:fSGllghHlFZSC7CBb1oetj/PKR/S3ds/piDrpr0Kmg0=
 github.com/go-widgets/webcanvas v0.1.0/go.mod h1:UAoPu9dO6ZzcFFwQbVeW4Jm4X67XFKVJab9A6qWwsMM=
 github.com/go-widgets/window v0.70.0 h1:ix9TAmEmCt+PvsYscrZiQm20l2KcT65QnQZ/U3Yav/4=
