@@ -8,7 +8,7 @@ require (
 	github.com/go-widgets/isoicons v0.1.0
 	github.com/go-widgets/mvvm v0.9.0
 	github.com/go-widgets/painter v0.13.0
-	github.com/go-widgets/toolkit v0.314.0
+	github.com/go-widgets/toolkit v0.316.0
 	github.com/go-widgets/webcanvas v0.1.0
 	github.com/go-widgets/window v0.73.0
 )
