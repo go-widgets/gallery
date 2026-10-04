@@ -1,6 +1,6 @@
 module github.com/go-widgets/gallery
 
-go 1.26.4
+go 1.27.1
 
 require (
 	github.com/go-crdt/crdt v0.55.0
