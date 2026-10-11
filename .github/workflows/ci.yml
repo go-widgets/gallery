@@ -29,6 +29,15 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # go test supplies its own main, so a package main with no native main
+      # passes the tests and still fails to link. That is how gallery and
+      # gallery/iso stayed unbuildable natively until stub_main.go and
+      # iso/native.go: this step is what would have said so.
+      - name: go build (native, no tags)
+        env:
+          CGO_ENABLED: "0"
+        run: go build ./...
+
       - name: Native scene test with coverage
         # main.go carries `//go:build js && wasm` so it drops out on
         # native; scene.go is tagless + gets 100 % of statements from
