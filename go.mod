@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/go-crdt/crdt v0.57.0
-	github.com/go-gfx/gfx v0.36.1
+	github.com/go-gfx/gfx v0.37.0
 	github.com/go-widgets/isoicons v0.4.0
 	github.com/go-widgets/mvvm v0.15.0
 	github.com/go-widgets/painter v0.16.0
