@@ -79,19 +79,19 @@ to `PixelPainter` at 1× and at 2×, and `BenchmarkGalleryFrame2x` /
 One `gpupainter.Painter` is kept and `Reset` each frame, and the pipelined
 benchmarks (`BenchmarkGalleryFrameMetalPipe`, `…Pipe2x`) `Submit` frame N,
 record frame N+1, then `Wait` for N. Measured on an M4 Max, single process,
-abbench `--max-load 8`, benchstat medians per frame:
+abbench `--max-load 8`, 8 kept rounds each, benchstat medians per frame,
+toolkit v0.355.1. Each Metal mode was its own interleaved pass, so each has
+its own CPU baseline:
 
-| | CPU (PixelPainter) | Metal, synchronous | Metal, pipelined |
-|---|---|---|---|
-| 1× 960×2834 | 1.98 ms | 3.09 ms (+56 %, n=4) | 1.69 ms (-15 %, n=6) |
-| 2× 1920×5370 (see note) | 6.56–6.68 ms | 10.6 ms (+59 %, n=4) | 5.43 ms (~, ±100 %, n=6) |
+| | CPU | Metal, synchronous | CPU | Metal, pipelined |
+|---|---|---|---|---|
+| 1× 960×2834 | 2.84 ms | 4.04 ms (+42 %, p=0.000) | 2.94 ms | 2.47 ms (−16 %, p=0.021) |
+| 2× 1920×5668 | 10.0 ms | 14.0 ms (+40 %, p=0.000) | 9.67 ms | 8.82 ms (~, p=0.195) |
 
-Pipelined, the GPU wins at 1× and ties at 2× within a noisy run; synchronous
-it loses at both, because recording the frame is CPU work either way.
-The 2× row was measured with toolkit v0.345.2, whose `Frame` chrome was not
-scaled (5370 high). With toolkit v0.355.1 the 2× surface is 1920×5668, exactly 2× the 1× height, and the
-frame is slightly larger; that run was deferred (host load above 8), so the 2×
-timings are for the earlier, smaller frame.
+Pipelined, the GPU wins at 1× and is not significantly different at 2×;
+synchronous, it loses at both, because recording the frame is CPU work either
+way. The rounds ran at a 1-minute load just under 8, which is why the CPU
+times are higher than the 1.98 ms measured on a quieter host.
 
 ## Interactions
 
