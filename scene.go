@@ -1102,7 +1102,14 @@ func (s *state) showNotify(text string) {
 // notification, CommandPalette) on top.
 func (s *state) draw(buf []byte) {
 	fillBG(buf, s.w, s.h, s.theme.Background)
-	p := painter.NewPixelPainter(buf, s.w, s.h)
+	s.paint(painter.NewPixelPainter(buf, s.w, s.h))
+}
+
+// paint draws every widget and overlay through p, over a ground already
+// filled with the theme's background. draw hands it a PixelPainter; a GPU
+// host hands it a go-widgets/gpupainter.Painter, which records the same
+// calls for the GPU.
+func (s *state) paint(p painter.Painter) {
 
 	// Top scaffold.
 	s.menuBar.Draw(p, s.theme)
@@ -1454,9 +1461,18 @@ func (s *state) tick() {
 
 // --- helpers --------------------------------------------------------------
 
+// fillBG writes c into every whole pixel of buf: one pixel, then copies that
+// each double what is already written, so a frame costs log2(pixels) copies
+// rather than four stores per pixel. The per-pixel loop it replaces was 40% of
+// a full gallery frame (BenchmarkGalleryFrame, 2026-11-05).
 func fillBG(buf []byte, w, h int, c toolkit.RGBA) {
-	for i := 0; i+3 < len(buf); i += 4 {
-		buf[i], buf[i+1], buf[i+2], buf[i+3] = c.R, c.G, c.B, c.A
+	buf = buf[:len(buf)&^3]
+	if len(buf) == 0 {
+		return
+	}
+	buf[0], buf[1], buf[2], buf[3] = c.R, c.G, c.B, c.A
+	for filled := 4; filled < len(buf); filled *= 2 {
+		copy(buf[filled:], buf[:filled])
 	}
 	_, _ = w, h
 }
