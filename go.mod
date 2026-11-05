@@ -1,13 +1,16 @@
 module github.com/go-widgets/gallery
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/go-crdt/crdt v0.57.0
-	github.com/go-gfx/gfx v0.37.0
+	github.com/go-gfx/gfx v0.41.0
+	github.com/go-gfx/gpu2d v0.2.0
+	github.com/go-macos/metal v0.3.0
+	github.com/go-widgets/gpupainter v0.1.0
 	github.com/go-widgets/isoicons v0.4.0
 	github.com/go-widgets/mvvm v0.15.0
-	github.com/go-widgets/painter v0.16.0
+	github.com/go-widgets/painter v0.16.2
 	github.com/go-widgets/toolkit v0.345.2
 	github.com/go-widgets/webcanvas v0.7.0
 	github.com/go-widgets/window v0.89.1
