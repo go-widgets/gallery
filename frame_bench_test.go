@@ -9,8 +9,14 @@ import "testing"
 // BenchmarkGalleryFrame repaints the whole gallery, every widget family, into
 // one RGBA buffer: the CPU cost of a full frame on today's renderer, which is
 // what a GPU painter would have to beat.
-func BenchmarkGalleryFrame(b *testing.B) {
-	s := newState(surfaceW, surfaceH)
+func BenchmarkGalleryFrame(b *testing.B) { benchGalleryFrame(b, 1) }
+
+// BenchmarkGalleryFrame2x is the same frame at Retina 2×: 1920 wide, every
+// widget laid out and drawn at 2×.
+func BenchmarkGalleryFrame2x(b *testing.B) { benchGalleryFrame(b, 2) }
+
+func benchGalleryFrame(b *testing.B, scale float64) {
+	s := scaledState(b, scale)
 	buf := make([]byte, 4*s.w*s.h)
 	b.SetBytes(int64(len(buf)))
 	b.ReportAllocs()

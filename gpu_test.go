@@ -7,12 +7,14 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/go-gfx/gpu2d"
 	gpumetal "github.com/go-gfx/gpu2d/metal"
 	mtl "github.com/go-macos/metal"
 	"github.com/go-widgets/gpupainter"
+	"github.com/go-widgets/toolkit"
 )
 
 // gpuFrame records the whole gallery for the GPU: the background, then every
@@ -26,10 +28,29 @@ func gpuFrame(s *state, l *gpu2d.List) {
 	gp.Flush() // pixels still being batched into an image
 }
 
+// scaledState builds the gallery at the given pixel ratio and puts the
+// toolkit's global metric scale back to 1 when the test or benchmark ends, so
+// the next one starts from the 1× default.
+func scaledState(tb testing.TB, scale float64) *state {
+	tb.Helper()
+	tb.Cleanup(func() { toolkit.SetMetricScale(1) })
+	return newStateAt(scale)
+}
+
 // The whole gallery, every widget family, drawn for the GPU and rasterized
-// by gpu2d's CPU reference, equals the PixelPainter frame byte for byte.
+// by gpu2d's CPU reference, equals the PixelPainter frame byte for byte, at 1×
+// and at Retina 2× (widgets laid out and drawn at 2×, not a bitmap upscale).
 func TestGalleryOnTheGPUPathIsPixelPainter(t *testing.T) {
-	s := newState(surfaceW, surfaceH)
+	for _, scale := range []float64{1, 2} {
+		t.Run(fmt.Sprintf("%gx", scale), func(t *testing.T) { galleryOnTheGPUPath(t, scale) })
+	}
+}
+
+func galleryOnTheGPUPath(t *testing.T, scale float64) {
+	s := scaledState(t, scale)
+	if s.w != int(float64(surfaceW)*scale) {
+		t.Fatalf("surface width %d, want %d", s.w, int(float64(surfaceW)*scale))
+	}
 	if s.theme.Background.A != 255 {
 		t.Skip("the theme's background is translucent: the frame starts from fillBG's raw bytes")
 	}
@@ -77,8 +98,13 @@ func TestGalleryOnTheGPUPathIsPixelPainter(t *testing.T) {
 // BenchmarkGalleryFrameMetal is the whole gallery on a Mac's GPU: recording
 // through gpupainter, binning, upload, dispatch and the wait. Compare with
 // BenchmarkGalleryFrame, the same frame through PixelPainter.
-func BenchmarkGalleryFrameMetal(b *testing.B) {
-	s := newState(surfaceW, surfaceH)
+func BenchmarkGalleryFrameMetal(b *testing.B) { benchGalleryFrameMetal(b, 1) }
+
+// BenchmarkGalleryFrameMetal2x is the same at Retina 2×: 1920 wide, widgets at 2×.
+func BenchmarkGalleryFrameMetal2x(b *testing.B) { benchGalleryFrameMetal(b, 2) }
+
+func benchGalleryFrameMetal(b *testing.B, scale float64) {
+	s := scaledState(b, scale)
 	r, err := gpumetal.New(s.w, s.h)
 	if errors.Is(err, mtl.ErrUnsupported) || errors.Is(err, mtl.ErrNoDevice) {
 		b.Skip(err)

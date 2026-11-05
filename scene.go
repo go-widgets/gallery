@@ -37,6 +37,17 @@ const surfaceW = 960
 // automatically as widgets are added or removed — nothing is clipped.
 var surfaceH = newState(surfaceW, 0).h
 
+// newStateAt builds the gallery for a display of the given pixel ratio: it sets
+// the toolkit's metric scale (every widget metric and the OpenType face follow,
+// see toolkit.SetMetricScale) and lays the surface out at surfaceW × scale
+// device pixels wide. At 2 the surface is 1920 × 2·surfaceH. The metric scale is
+// a toolkit-wide global, so one scale is live at a time: a caller that wants 1×
+// again calls toolkit.SetMetricScale(1) before the next newState.
+func newStateAt(scale float64) *state {
+	toolkit.SetMetricScale(scale)
+	return newState(int(float64(surfaceW)*scale+0.5), 0)
+}
+
 // themeRowH sizes the ViewSwitcher strip sitting between the Toolbar
 // and the column grid. Keep the strip roomy enough that the segment
 // labels don't clip on the 5×7 bitmap font.
@@ -264,12 +275,35 @@ type state struct {
 // frameChromeH is the vertical space a titled Frame adds around its child:
 // the 1px top+bottom border, the FrameTitleH title bar and the default 4px
 // padding on top+bottom. Used to size a section Frame from its content height.
-const frameChromeH = 2 + toolkit.FrameTitleH + 2*4
+//
+// Every layout number in this file is in LOGICAL pixels and goes through sc
+// (toolkit.Scaled) at the point it becomes a bound, so the same code lays the
+// gallery out at any toolkit.MetricScale. The Frame's own padding is set to
+// sc(framePad) for the same reason; the title bar and the 1px border are the
+// toolkit's constants (FrameTitleH, 1) and are not metric-scaled there.
+const framePad = 4
 
-// boxItem pairs a widget with the fixed height it occupies in a VBox column.
+func frameChromeH() int { return 2 + toolkit.FrameTitleH + 2*sc(framePad) }
+
+// sc converts a logical pixel length to device pixels at the toolkit's
+// current metric scale: 1× is the identity, 2× doubles (rounded).
+func sc(v int) int { return toolkit.Scaled(v) }
+
+// boxItem pairs a widget with the fixed height it occupies in a VBox column,
+// in logical pixels. A height already in device pixels (one measured from the
+// font, like the Diff's) is passed as devPx(h), stored negated.
 type boxItem struct {
 	w toolkit.Widget
 	h int
+}
+
+func devPx(h int) int { return -h }
+
+func (it boxItem) height() int {
+	if it.h < 0 {
+		return -it.h
+	}
+	return sc(it.h)
 }
 
 // sectionFrame wraps items in a titled Frame whose child is a vertical box
@@ -278,25 +312,26 @@ type boxItem struct {
 // column VBox can AddFixed it without guessing.
 func sectionFrame(title string, spacing int, items ...boxItem) (*toolkit.Frame, int) {
 	vb := toolkit.NewVBox()
-	vb.Spacing = spacing
+	vb.Spacing = sc(spacing)
 	content := 0
 	for i, it := range items {
-		vb.AddFixed(it.w, it.h)
-		content += it.h
+		vb.AddFixed(it.w, it.height())
+		content += it.height()
 		if i > 0 {
-			content += spacing
+			content += sc(spacing)
 		}
 	}
 	f := toolkit.NewFrame(vb)
 	f.Title = title
-	return f, content + frameChromeH
+	f.Padding = sc(framePad)
+	return f, content + frameChromeH()
 }
 
 // hrowFlex lays widgets left-to-right with equal flex weight (an HBox), for a
 // section row that puts two widgets side by side (e.g. Button + ToggleButton).
 func hrowFlex(spacing int, ws ...toolkit.Widget) toolkit.Widget {
 	hb := toolkit.NewHBox()
-	hb.Spacing = spacing
+	hb.Spacing = sc(spacing)
 	for _, w := range ws {
 		hb.AddFlex(w, 1)
 	}
@@ -308,8 +343,8 @@ func hrowFlex(spacing int, ws ...toolkit.Widget) toolkit.Widget {
 // (fixed) + vertical Steps (fill).
 func hrowFixedFlex(spacing, fixedW int, fixed, flex toolkit.Widget) toolkit.Widget {
 	hb := toolkit.NewHBox()
-	hb.Spacing = spacing
-	hb.AddFixed(fixed, fixedW)
+	hb.Spacing = sc(spacing)
+	hb.AddFixed(fixed, sc(fixedW))
 	hb.AddFlex(flex, 1)
 	return hb
 }
@@ -319,13 +354,13 @@ func hrowFixedFlex(spacing, fixedW int, fixed, flex toolkit.Widget) toolkit.Widg
 // inter-section spacing) so newState can position it exactly.
 func column(frames []*toolkit.Frame, heights []int) (*toolkit.VBox, int) {
 	vb := toolkit.NewVBox()
-	vb.Spacing = sectPad
+	vb.Spacing = sc(sectPad)
 	total := 0
 	for i, f := range frames {
-		vb.AddFixed(f, heights[i])
+		vb.AddFixed(f, heights[i]) // already device pixels: sectionFrame scaled them
 		total += heights[i]
 		if i > 0 {
-			total += sectPad
+			total += sc(sectPad)
 		}
 	}
 	return vb, total
@@ -346,6 +381,18 @@ func newState(w, _ int) *state {
 	_ = toolkit.UseOpenTypeText()
 
 	s := &state{w: w, theme: toolkit.DefaultLight()}
+
+	// Geometry in DEVICE pixels at the toolkit's current metric scale. w is the
+	// surface width in device pixels (surfaceW at 1×, surfaceW×scale otherwise);
+	// the constants above are the logical values, shadowed here so the layout
+	// below reads the same at every scale.
+	margin, gutter := sc(margin), sc(gutter)
+	sectPad, themeRowH := sc(sectPad), sc(themeRowH)
+	menuBarH, toolbarH, statusbarH := sc(toolkit.MenuBarH), sc(toolkit.ToolbarButtonH), sc(toolkit.StatusbarH)
+	colW := (w - 2*margin - 2*gutter) / 3
+	colAX := margin
+	colBX := colAX + colW + gutter
+	colCX := colBX + colW + gutter
 
 	// --- top scaffold -----------------------------------------------------
 
@@ -374,7 +421,7 @@ func newState(w, _ int) *state {
 		toolkit.NewMenu([]toolkit.MenuItem{menu("Zoom in"), menu("Zoom out"), menu("Reset")}),
 		toolkit.NewMenu([]toolkit.MenuItem{menu("About")}),
 	}
-	s.menuBar.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: toolkit.MenuBarH})
+	s.menuBar.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: menuBarH})
 
 	s.toolbar = toolkit.NewToolbar([]toolkit.ToolbarItem{
 		{Label: "N", OnClick: func() { s.showNotify("Toolbar: New") }},
@@ -387,7 +434,7 @@ func newState(w, _ int) *state {
 		{Separator: true},
 		{Label: "?", OnClick: func() { s.showNotify("go-widgets/toolkit @ " + toolkitVersion) }},
 	})
-	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: toolkit.MenuBarH, W: w, H: toolkit.ToolbarButtonH})
+	s.toolbar.SetBounds(toolkit.Rect{X: 0, Y: menuBarH, W: w, H: toolbarH})
 
 	s.status = toolkit.NewStatusbar([]string{"~98 widgets", "100 % cov", "click something", "go-widgets/toolkit " + toolkitVersion})
 
@@ -433,7 +480,7 @@ func newState(w, _ int) *state {
 	// to vm.themeIndex; a subscription applies the palette).
 	s.themeSwitcher.SetBounds(toolkit.Rect{
 		X: margin,
-		Y: toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad,
+		Y: menuBarH + toolbarH + sectPad,
 		W: w - 2*margin,
 		H: themeRowH,
 	})
@@ -715,7 +762,7 @@ func newState(w, _ int) *state {
 	s.propGrid.Add("Visible", "true")
 	s.propGrid.Table().Selected().Set(2)
 	// Open the editor on the "Title" value cell so the demo shows editing.
-	s.propGrid.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: colW - 40, Y: toolkit.TableHeaderHeight + 2*toolkit.TableRowHeight + 2})
+	s.propGrid.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: colW - sc(40), Y: sc(toolkit.TableHeaderHeight + 2*toolkit.TableRowHeight + 2)})
 
 	s.pagingBar = toolkit.NewPagingToolbar(6, 12)
 	s.pagingBar.ShowRefresh = true
@@ -739,7 +786,7 @@ func newState(w, _ int) *state {
 	)
 	s.gridEdit.GroupBy = 0
 	// Open the Owner editor on the first data row (visual line 1).
-	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: 130, Y: toolkit.TableHeaderHeight + toolkit.TableRowHeight + 2})
+	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventClick, X: sc(130), Y: sc(toolkit.TableHeaderHeight + toolkit.TableRowHeight + 2)})
 	s.gridEdit.OnEvent(toolkit.Event{Kind: toolkit.EventChar, Code: "!"})
 
 	// --- Column C extension: Wave 6 (v0.81) — construction only ---------
@@ -749,13 +796,13 @@ func newState(w, _ int) *state {
 	dvSubs := []string{"12 unread · 2m ago", "3 unread · 1h ago", "all read · yesterday", "8 unread · 5m ago"}
 	dvSwatch := []toolkit.RGBA{toolkit.RGB(0xe0, 0x50, 0x50), toolkit.RGB(0x50, 0xa0, 0xe0), toolkit.RGB(0x50, 0xb0, 0x70), toolkit.RGB(0xc0, 0x80, 0xe0)}
 	s.dataView = toolkit.NewListBox([]string{"Reddit", "Hacker News", "Lobsters", "GitHub"})
-	s.dataView.RowHeight = 32
+	s.dataView.RowHeight = sc(32)
 	s.dataView.Selected().Set(1)
 	s.dataView.ItemRenderer = func(p painter.Painter, theme *toolkit.Theme, rc toolkit.Rect, i int, item string, sel bool, ink toolkit.RGBA) {
-		p.FillRect(painter.Rect{X: rc.X + 8, Y: rc.Y + rc.H/2 - 6, W: 12, H: 12}, dvSwatch[i])
+		p.FillRect(painter.Rect{X: rc.X + sc(8), Y: rc.Y + rc.H/2 - sc(6), W: sc(12), H: sc(12)}, dvSwatch[i])
 		title := toolkit.NewLabel(item)
 		title.Ink = ink
-		title.SetBounds(toolkit.Rect{X: rc.X + 28, Y: rc.Y + 4, W: rc.W - 32, H: 14})
+		title.SetBounds(toolkit.Rect{X: rc.X + sc(28), Y: rc.Y + sc(4), W: rc.W - sc(32), H: sc(14)})
 		title.Draw(p, theme)
 		sub := toolkit.NewLabel(dvSubs[i])
 		subInk := ink
@@ -763,7 +810,7 @@ func newState(w, _ int) *state {
 			subInk = toolkit.RGB(0x90, 0x90, 0x90)
 		}
 		sub.Ink = subInk
-		sub.SetBounds(toolkit.Rect{X: rc.X + 28, Y: rc.Y + 18, W: rc.W - 32, H: 12})
+		sub.SetBounds(toolkit.Rect{X: rc.X + sc(28), Y: rc.Y + sc(18), W: rc.W - sc(32), H: sc(12)})
 		sub.Draw(p, theme)
 	}
 
@@ -886,7 +933,7 @@ func newState(w, _ int) *state {
 		toolkit.NewLabel("  Detail"))
 	s.appBorder = toolkit.NewBorder()
 	s.appBorder.West = s.sidebar
-	s.appBorder.WestSize = 150
+	s.appBorder.WestSize = sc(150)
 	s.appBorder.WestSplit = true // draggable grip between sidebar and centre
 	s.appBorder.Center = s.appPaned
 
@@ -934,7 +981,7 @@ func newState(w, _ int) *state {
 	s.colA, totalA = column(
 		[]*toolkit.Frame{fActions, fInputs, fFeedback, fNotebook, fWave1, fWave4, fWave5, fWave6, fWave7},
 		[]int{hActions, hInputs, hFeedback, hNotebook, hWave1, hWave4, hWave5, hWave6, hWave7})
-	colATop := toolkit.MenuBarH + toolkit.ToolbarButtonH + sectPad + themeRowH + sectPad
+	colATop := menuBarH + toolbarH + sectPad + themeRowH + sectPad
 	s.colA.SetBounds(toolkit.Rect{X: colAX, Y: colATop, W: colW, H: totalA})
 
 	// --- Column B, re-composed with the box-layout system ----------------
@@ -947,9 +994,9 @@ func newState(w, _ int) *state {
 	fColor, hColor := sectionFrame("ColorChooser", sectGap, boxItem{s.colorChoose, 130})
 	// Size the Diff to its content so Wave 2 adapts (its lines used to clip
 	// against a fixed 54px box).
-	diffH := len(s.diff.Lines)*toolkit.DiffLineH() + 2*toolkit.DiffPadY
+	diffH := len(s.diff.Lines)*toolkit.DiffLineH() + 2*toolkit.DiffPadY // font-measured: device pixels
 	fWave2, hWave2 := sectionFrame("Wave 2 (v0.8)", sectGap,
-		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, diffH})
+		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, devPx(diffH)})
 	fWave4B, hWave4B := sectionFrame("Wave 4 (v0.33)", sectGap,
 		boxItem{s.notebookSide, 70}, boxItem{s.dropdownUp, 26})
 	fWave5B, hWave5B := sectionFrame("Wave 5 (v0.42)", sectGap,
@@ -1007,18 +1054,18 @@ func newState(w, _ int) *state {
 		[]int{hShell, hAgenda, hKanban, hGantt})
 	colsBottom := max(totalA, totalB, totalC)
 	wideTop := colATop + colsBottom + sectPad
-	s.colWide.SetBounds(toolkit.Rect{X: margin, Y: wideTop, W: surfaceW - 2*margin, H: totalWide})
+	s.colWide.SetBounds(toolkit.Rect{X: margin, Y: wideTop, W: w - 2*margin, H: totalWide})
 
 	// --- Height is COMPUTED from the box-layout content -------------------
 	// The surface sizes to whatever the columns + full-width band actually
 	// need, plus the bottom Statusbar; nothing is clipped, and adding a widget
 	// grows the canvas automatically (surfaceH is derived from this via a
 	// package var). Position the deferred, height-dependent chrome now.
-	s.h = wideTop + totalWide + sectPad + toolkit.StatusbarH
-	s.status.SetBounds(toolkit.Rect{X: 0, Y: s.h - toolkit.StatusbarH, W: w, H: toolkit.StatusbarH})
+	s.h = wideTop + totalWide + sectPad + statusbarH
+	s.status.SetBounds(toolkit.Rect{X: 0, Y: s.h - statusbarH, W: w, H: statusbarH})
 	s.cmdPalette.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: s.h})
 	s.ctxMenu.SetBounds(toolkit.Rect{X: 0, Y: 0, W: w, H: s.h})
-	s.notify.SetBounds(toolkit.Rect{X: w - 268, Y: s.h - toolkit.StatusbarH - 32, W: 260, H: 24})
+	s.notify.SetBounds(toolkit.Rect{X: w - sc(268), Y: s.h - statusbarH - sc(32), W: sc(260), H: sc(24)})
 
 	// --- click routing table --------------------------------------------
 
@@ -1091,7 +1138,7 @@ func newState(w, _ int) *state {
 // message or leave a wide empty box around a short one.
 func (s *state) showNotify(text string) {
 	s.notify.Show(text)
-	s.notify.AnchorIn(toolkit.Rect{X: 0, Y: 0, W: s.w, H: s.h - toolkit.StatusbarH}, toolkit.BottomRight)
+	s.notify.AnchorIn(toolkit.Rect{X: 0, Y: 0, W: s.w, H: s.h - sc(toolkit.StatusbarH)}, toolkit.BottomRight)
 }
 
 // draw paints the whole dashboard onto buf. Buf is an RGBA row-major
@@ -1141,7 +1188,7 @@ func (s *state) paint(p painter.Painter) {
 	if active := s.menuBar.Active().Get(); active >= 0 && active < len(s.menuBar.Menus) {
 		m := s.menuBar.Menus[active]
 		nx := s.menuBar.NameOriginX(active)
-		m.SetBounds(toolkit.Rect{X: nx, Y: toolkit.MenuBarH, W: 160, H: 4 + toolkit.MenuRowH*len(m.Items)})
+		m.SetBounds(toolkit.Rect{X: nx, Y: sc(toolkit.MenuBarH), W: sc(160), H: sc(4 + toolkit.MenuRowH*len(m.Items))})
 		m.Draw(p, s.theme)
 	}
 	s.notify.Draw(p, s.theme)
