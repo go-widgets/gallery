@@ -994,7 +994,7 @@ func newState(w, _ int) *state {
 	fColor, hColor := sectionFrame("ColorChooser", sectGap, boxItem{s.colorChoose, 130})
 	// Size the Diff to its content so Wave 2 adapts (its lines used to clip
 	// against a fixed 54px box).
-	diffH := len(s.diff.Lines)*toolkit.DiffLineH() + 2*toolkit.DiffPadY // font-measured: device pixels
+	diffH := len(s.diff.Lines)*toolkit.DiffLineH() + 2*sc(toolkit.DiffPadY) // font-measured: device pixels
 	fWave2, hWave2 := sectionFrame("Wave 2 (v0.8)", sectGap,
 		boxItem{s.headerBar, 36}, boxItem{s.toast, 24}, boxItem{s.banner, 24}, boxItem{s.diff, devPx(diffH)})
 	fWave4B, hWave4B := sectionFrame("Wave 4 (v0.33)", sectGap,

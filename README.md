@@ -89,7 +89,7 @@ abbench `--max-load 8`, benchstat medians per frame:
 Pipelined, the GPU wins at 1× and ties at 2× within a noisy run; synchronous
 it loses at both, because recording the frame is CPU work either way.
 The 2× row was measured with toolkit v0.345.2, whose `Frame` chrome was not
-scaled (5370 high). With toolkit v0.355.0 the 2× surface is 1920×5658 and the
+scaled (5370 high). With toolkit v0.355.1 the 2× surface is 1920×5668, exactly 2× the 1× height, and the
 frame is slightly larger; that run was deferred (host load above 8), so the 2×
 timings are for the earlier, smaller frame.
 
