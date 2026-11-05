@@ -278,12 +278,13 @@ type state struct {
 //
 // Every layout number in this file is in LOGICAL pixels and goes through sc
 // (toolkit.Scaled) at the point it becomes a bound, so the same code lays the
-// gallery out at any toolkit.MetricScale. The Frame's own padding is set to
-// sc(framePad) for the same reason; the title bar and the 1px border are the
-// toolkit's constants (FrameTitleH, 1) and are not metric-scaled there.
+// gallery out at any toolkit.MetricScale. A Frame scales its own title bar,
+// border and default padding (toolkit v0.355.0), so the chrome here is the same
+// sum in device pixels: border (scaled 1px, at least 1) on both sides, the
+// scaled title bar and the scaled default padding on both sides.
 const framePad = 4
 
-func frameChromeH() int { return 2 + toolkit.FrameTitleH + 2*sc(framePad) }
+func frameChromeH() int { return 2*max(sc(1), 1) + sc(toolkit.FrameTitleH) + 2*sc(framePad) }
 
 // sc converts a logical pixel length to device pixels at the toolkit's
 // current metric scale: 1× is the identity, 2× doubles (rounded).
@@ -323,7 +324,6 @@ func sectionFrame(title string, spacing int, items ...boxItem) (*toolkit.Frame, 
 	}
 	f := toolkit.NewFrame(vb)
 	f.Title = title
-	f.Padding = sc(framePad)
 	return f, content + frameChromeH()
 }
 
