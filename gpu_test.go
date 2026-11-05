@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-gfx/gpu2d"
 	gpumetal "github.com/go-gfx/gpu2d/metal"
-	"github.com/go-widgets/gpupainter"
 	mtl "github.com/go-macos/metal"
+	"github.com/go-widgets/gpupainter"
 )
 
 // gpuFrame records the whole gallery for the GPU: the background, then every
