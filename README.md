@@ -75,6 +75,19 @@ widgets are drawn at 2×, not a bitmap upscale. The parity test checks that
 the GPU path (`gpupainter`, gpu2d's CPU reference and Metal) is byte-identical
 to `PixelPainter` at 1× and at 2×, and `BenchmarkGalleryFrame2x` /
 `BenchmarkGalleryFrameMetal2x` measure CPU against Metal at both scales.
+
+One `gpupainter.Painter` is kept and `Reset` each frame, and the pipelined
+benchmarks (`BenchmarkGalleryFrameMetalPipe`, `…Pipe2x`) `Submit` frame N,
+record frame N+1, then `Wait` for N. Measured on an M4 Max, single process,
+abbench `--max-load 8`, benchstat medians per frame:
+
+| | CPU (PixelPainter) | Metal, synchronous | Metal, pipelined |
+|---|---|---|---|
+| 1× 960×2834 | 1.98 ms | 3.09 ms (+56 %, n=4) | 1.69 ms (-15 %, n=6) |
+| 2× 1920×5370 | 6.56–6.68 ms | 10.6 ms (+59 %, n=4) | 5.43 ms (~, ±100 %, n=6) |
+
+Pipelined, the GPU wins at 1× and ties at 2× within a noisy run; synchronous
+it loses at both, because recording the frame is CPU work either way.
 Known gap: `toolkit.Frame`'s title bar and border are not metric-scaled in the
 toolkit, so section titles sit in a 1× bar at 2×.
 

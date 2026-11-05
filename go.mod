@@ -5,9 +5,9 @@ go 1.27.3
 require (
 	github.com/go-crdt/crdt v0.57.0
 	github.com/go-gfx/gfx v0.41.0
-	github.com/go-gfx/gpu2d v0.2.0
-	github.com/go-macos/metal v0.3.0
-	github.com/go-widgets/gpupainter v0.2.0
+	github.com/go-gfx/gpu2d v0.3.0
+	github.com/go-macos/metal v0.4.0
+	github.com/go-widgets/gpupainter v0.3.0
 	github.com/go-widgets/isoicons v0.4.0
 	github.com/go-widgets/mvvm v0.15.0
 	github.com/go-widgets/painter v0.16.2
@@ -18,13 +18,13 @@ require (
 
 require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/ebitengine/purego v0.11.3 // indirect
 	github.com/go-freedesktop/x11 v0.3.0 // indirect
 	github.com/go-gtk/gtk4 v0.9.0 // indirect
 	github.com/go-icons/iconoir v0.3.0 // indirect
 	github.com/go-images/images v0.1.1-0.20261026203936-4ac989d310a1 // indirect
 	github.com/go-macos/appkit v0.9.0 // indirect
-	github.com/go-macos/objc v0.11.0 // indirect
+	github.com/go-macos/objc v0.11.2 // indirect
 	github.com/go-mswin/win32 v0.6.0 // indirect
 	github.com/go-opentype/fonts v0.14.0 // indirect
 	github.com/go-opentype/opentype v0.16.2-0.20261027113239-5e69589e9a5e // indirect

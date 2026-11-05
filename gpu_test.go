@@ -19,13 +19,24 @@ import (
 
 // gpuFrame records the whole gallery for the GPU: the background, then every
 // widget through gpupainter.
-func gpuFrame(s *state, l *gpu2d.List) {
-	l.Reset()
+func gpuFrame(s *state, l *gpu2d.List) { newGPURec(l).frame(s) }
+
+// gpuRec keeps ONE gpupainter.Painter across frames: frame resets the list,
+// then the painter (Painter.Reset does not reset the list), and records again.
+type gpuRec struct {
+	l  *gpu2d.List
+	gp *gpupainter.Painter
+}
+
+func newGPURec(l *gpu2d.List) *gpuRec { return &gpuRec{l: l, gp: gpupainter.New(l)} }
+
+func (g *gpuRec) frame(s *state) {
+	g.l.Reset()
 	bg := s.theme.Background
-	l.FillRect(gpu2d.Rect{W: s.w, H: s.h}, gpu2d.RGBA{R: bg.R, G: bg.G, B: bg.B, A: bg.A})
-	gp := gpupainter.New(l)
-	s.paint(gp)
-	gp.Flush() // pixels still being batched into an image
+	g.l.FillRect(gpu2d.Rect{W: s.w, H: s.h}, gpu2d.RGBA{R: bg.R, G: bg.G, B: bg.B, A: bg.A})
+	g.gp.Reset(g.l)
+	s.paint(g.gp)
+	g.gp.Flush() // pixels still being batched into an image
 }
 
 // scaledState builds the gallery at the given pixel ratio and puts the
@@ -104,6 +115,15 @@ func BenchmarkGalleryFrameMetal(b *testing.B) { benchGalleryFrameMetal(b, 1) }
 func BenchmarkGalleryFrameMetal2x(b *testing.B) { benchGalleryFrameMetal(b, 2) }
 
 func benchGalleryFrameMetal(b *testing.B, scale float64) {
+	benchMetal(b, scale, false)
+}
+
+// BenchmarkGalleryFrameMetalPipe is the pipelined frame: Submit frame N, record
+// frame N+1 while the GPU draws it, then Wait for N. Same at 2×.
+func BenchmarkGalleryFrameMetalPipe(b *testing.B)   { benchMetal(b, 1, true) }
+func BenchmarkGalleryFrameMetalPipe2x(b *testing.B) { benchMetal(b, 2, true) }
+
+func benchMetal(b *testing.B, scale float64, pipelined bool) {
 	s := scaledState(b, scale)
 	r, err := gpumetal.New(s.w, s.h)
 	if errors.Is(err, mtl.ErrUnsupported) || errors.Is(err, mtl.ErrNoDevice) {
@@ -116,10 +136,24 @@ func benchGalleryFrameMetal(b *testing.B, scale float64) {
 	l, _ := gpu2d.NewList(s.w, s.h)
 	b.SetBytes(int64(4 * s.w * s.h))
 	b.ReportAllocs()
-	for b.Loop() {
-		gpuFrame(s, l)
-		if err := r.Draw(l); err != nil {
-			b.Fatal(err)
+	rec := newGPURec(l)
+	if pipelined {
+		rec.frame(s)
+		for b.Loop() {
+			if err := r.Submit(l); err != nil { // copies the list
+				b.Fatal(err)
+			}
+			rec.frame(s) // record N+1 while the GPU draws N
+			if err := r.Wait(); err != nil {
+				b.Fatal(err)
+			}
+		}
+	} else {
+		for b.Loop() {
+			rec.frame(s)
+			if err := r.Draw(l); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 	b.ReportMetric(float64(len(l.Instances())), "instances")
