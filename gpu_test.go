@@ -21,7 +21,9 @@ func gpuFrame(s *state, l *gpu2d.List) {
 	l.Reset()
 	bg := s.theme.Background
 	l.FillRect(gpu2d.Rect{W: s.w, H: s.h}, gpu2d.RGBA{R: bg.R, G: bg.G, B: bg.B, A: bg.A})
-	s.paint(gpupainter.New(l))
+	gp := gpupainter.New(l)
+	s.paint(gp)
+	gp.Flush() // pixels still being batched into an image
 }
 
 // The whole gallery, every widget family, drawn for the GPU and rasterized

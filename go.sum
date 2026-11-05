@@ -43,8 +43,8 @@ github.com/go-typeset/bidi v0.3.1 h1:fsTa0b9txt2SkH7M55EZ06+q3N9C4O0Oerf+SPLLGFs
 github.com/go-typeset/bidi v0.3.1/go.mod h1:ct3cmYT8Qt1FGJQ+2QaakrUxqaP4ZysgdQQg2ym5+Xo=
 github.com/go-widgets/android v0.15.0 h1:KM5Fy3pkWTyc636RywilbIZWO+CcD/ksH5pXwc5tfTA=
 github.com/go-widgets/android v0.15.0/go.mod h1:7AettQlvrhsPjvGAcXWkNhWUShh7D/pEnzyzW4mpJEE=
-github.com/go-widgets/gpupainter v0.1.0 h1:HiBBNVDcAJdY70Ff7WylgZVMqVAjB3ceKNvMvSnMFIY=
-github.com/go-widgets/gpupainter v0.1.0/go.mod h1:N/tw9FtrggFYvacVkW9jhZnePO0YbE4QxrDKH18ODRI=
+github.com/go-widgets/gpupainter v0.2.0 h1:NC0C3bjidyElU1MIRuj2v/0eB+bS8F/hmNCDY75DkNQ=
+github.com/go-widgets/gpupainter v0.2.0/go.mod h1:N/tw9FtrggFYvacVkW9jhZnePO0YbE4QxrDKH18ODRI=
 github.com/go-widgets/isoicons v0.4.0 h1:t4n+vhp4sJrsBd9DZ+cR4klm7gm758Wj93uZ1BF5fNQ=
 github.com/go-widgets/isoicons v0.4.0/go.mod h1:jMuprd0v/uMcECg/kt6w5eYSaDJwuY8E1NtLfovGxAw=
 github.com/go-widgets/mvvm v0.15.0 h1:VvZiLB7gm+5CIEeQH3GNI53ytUndzOznT/fJvaG8hOQ=
