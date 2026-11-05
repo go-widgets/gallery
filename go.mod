@@ -11,7 +11,7 @@ require (
 	github.com/go-widgets/isoicons v0.4.0
 	github.com/go-widgets/mvvm v0.15.0
 	github.com/go-widgets/painter v0.16.2
-	github.com/go-widgets/toolkit v0.345.2
+	github.com/go-widgets/toolkit v0.355.0
 	github.com/go-widgets/webcanvas v0.7.0
 	github.com/go-widgets/window v0.89.1
 )
@@ -32,6 +32,7 @@ require (
 	github.com/go-richdoc/richdoc v0.7.0 // indirect
 	github.com/go-typeset/bidi v0.3.1 // indirect
 	github.com/go-widgets/android v0.15.0 // indirect
+	github.com/go-widgets/textinput v0.1.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
