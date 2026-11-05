@@ -65,6 +65,19 @@ container/layout system (VBox/HBox/Grid/Frame/Border/Paned), and the
 Wave-7 dashboard widgets (Kanban, Gantt, Agenda, Sparkline, Area/
 Scatter/Radar charts).
 
+### Retina (2×)
+
+The surface is 960 wide at 1×. `newStateAt(2)` renders the same scene for a
+Retina display: it calls `toolkit.SetMetricScale(2)` (every widget metric and
+the OpenType face follow) and lays the layout out at 1920 device pixels wide,
+every logical length in `scene.go` going through `sc` (`toolkit.Scaled`). The
+widgets are drawn at 2×, not a bitmap upscale. The parity test checks that
+the GPU path (`gpupainter`, gpu2d's CPU reference and Metal) is byte-identical
+to `PixelPainter` at 1× and at 2×, and `BenchmarkGalleryFrame2x` /
+`BenchmarkGalleryFrameMetal2x` measure CPU against Metal at both scales.
+Known gap: `toolkit.Frame`'s title bar and border are not metric-scaled in the
+toolkit, so section titles sit in a 1× bar at 2×.
+
 ## Interactions
 
 The gallery is a demonstrator you **drive**, not just look at:
