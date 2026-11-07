@@ -13,12 +13,12 @@ github.com/go-freedesktop/x11 v0.3.0 h1:DAZN7uAt8eQOyav90VduelaEJyTdWlAZjOTZOKvu
 github.com/go-freedesktop/x11 v0.3.0/go.mod h1:6GsirPySzG8JmIhqUYc0bDcMfrXuaGf9iRsOWSP8JsU=
 github.com/go-gfx/gfx v0.41.0 h1:MVEnory0Zx8ypzuVDrTIWz4Cekv8hn5ilcYg3glJPrk=
 github.com/go-gfx/gfx v0.41.0/go.mod h1:4OenoKrgdht6UXYf5SV8w2tb41hfAdy4QoxJRPsRDz4=
-github.com/go-gfx/gpu2d v0.5.1 h1:qjMQNFXPG+0yvUDJGkKlth1o1dpZzLs3d+CAHZRTbi8=
-github.com/go-gfx/gpu2d v0.5.1/go.mod h1:o49M4VSvllY2WkvlDNE1bu9IfI8UWjIIcE3lwBqNAuA=
+github.com/go-gfx/gpu2d v0.6.0 h1:dnYmiPAR//gE4Lo1gC/rMD4gRuoftjbPrvbhEj6OEQ8=
+github.com/go-gfx/gpu2d v0.6.0/go.mod h1:g66iA9qgNjPdrAllG10tiRnCxQBTy8d9eLEAFV7/Gdk=
 github.com/go-gfx/webgpu v0.15.0 h1:YqEOflkk9ej8KFYJvO4gMTpw9c9FtqmKLLP5joRDG2Y=
 github.com/go-gfx/webgpu v0.15.0/go.mod h1:doIaanN3TQ5QUSTUXDvSOrUYIdyAAfNmqCSDio2JTuo=
-github.com/go-gfx/wgsl v0.4.0 h1:SJOaSkvTcPvK9wdp3vM8ruXFvtxeFLvYEBLV3ZPm4zA=
-github.com/go-gfx/wgsl v0.4.0/go.mod h1:Fzzw0jXvB+zxCqmTDwvcu3B7PkIVJBcygl2dyDyDAgQ=
+github.com/go-gfx/wgsl v0.5.0 h1:qjMmCAHxGLcrUmc1HU3DK8lo6MRu9XIMfrOWU3IcK64=
+github.com/go-gfx/wgsl v0.5.0/go.mod h1:Fzzw0jXvB+zxCqmTDwvcu3B7PkIVJBcygl2dyDyDAgQ=
 github.com/go-gtk/gtk4 v0.9.0 h1:5Efx48jeWL1LTmKIqqPcseSoa4U8Pf0Sbzo/rU4nmGA=
 github.com/go-gtk/gtk4 v0.9.0/go.mod h1:BTpReN9ONh5ZO4p2ETjt8n7km3yEYOFW/Q9HprOC13g=
 github.com/go-icons/iconoir v0.3.0 h1:kHG2sU5IsCvtBS1JICuXgfFo5f8UfwY1m7KYMVy97CI=

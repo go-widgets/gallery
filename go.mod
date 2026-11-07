@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/go-crdt/crdt v0.57.0
 	github.com/go-gfx/gfx v0.41.0
-	github.com/go-gfx/gpu2d v0.5.1
+	github.com/go-gfx/gpu2d v0.6.0
 	github.com/go-macos/metal v0.6.0
 	github.com/go-widgets/gpupainter v0.4.0
 	github.com/go-widgets/isoicons v0.4.0
