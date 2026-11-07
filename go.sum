@@ -13,8 +13,8 @@ github.com/go-freedesktop/x11 v0.3.0 h1:DAZN7uAt8eQOyav90VduelaEJyTdWlAZjOTZOKvu
 github.com/go-freedesktop/x11 v0.3.0/go.mod h1:6GsirPySzG8JmIhqUYc0bDcMfrXuaGf9iRsOWSP8JsU=
 github.com/go-gfx/gfx v0.41.0 h1:MVEnory0Zx8ypzuVDrTIWz4Cekv8hn5ilcYg3glJPrk=
 github.com/go-gfx/gfx v0.41.0/go.mod h1:4OenoKrgdht6UXYf5SV8w2tb41hfAdy4QoxJRPsRDz4=
-github.com/go-gfx/gpu2d v0.4.0 h1:ULV3yjE3zYfJF4MWzKa6itlnHd3yxvTvbi1hshCv4Mo=
-github.com/go-gfx/gpu2d v0.4.0/go.mod h1:o49M4VSvllY2WkvlDNE1bu9IfI8UWjIIcE3lwBqNAuA=
+github.com/go-gfx/gpu2d v0.5.0 h1:UN4paOfxTh0FDyhV9MWit2gfa7GQBPJM3awPw/0I45A=
+github.com/go-gfx/gpu2d v0.5.0/go.mod h1:o49M4VSvllY2WkvlDNE1bu9IfI8UWjIIcE3lwBqNAuA=
 github.com/go-gtk/gtk4 v0.9.0 h1:5Efx48jeWL1LTmKIqqPcseSoa4U8Pf0Sbzo/rU4nmGA=
 github.com/go-gtk/gtk4 v0.9.0/go.mod h1:BTpReN9ONh5ZO4p2ETjt8n7km3yEYOFW/Q9HprOC13g=
 github.com/go-icons/iconoir v0.3.0 h1:kHG2sU5IsCvtBS1JICuXgfFo5f8UfwY1m7KYMVy97CI=
@@ -45,8 +45,8 @@ github.com/go-widgets/android v0.16.0 h1:XZcVp5c67B4mDHF6g3kccg1gCWiHjCUltR2jECn
 github.com/go-widgets/android v0.16.0/go.mod h1:jgUuRKxDTGIGpgzb5rnImlfYZLZBai32v8WPwXSwxOo=
 github.com/go-widgets/gpupainter v0.4.0 h1:0vCn1fdCmKzY9HvA7ZIvuShTaMez/4J1boFmoPIwfyc=
 github.com/go-widgets/gpupainter v0.4.0/go.mod h1:FsiQjTB+EbxOprUMPqExALrzSyrNta3wTKbpA8dbfUM=
-github.com/go-widgets/isoicons v0.4.0 h1:t4n+vhp4sJrsBd9DZ+cR4klm7gm758Wj93uZ1BF5fNQ=
-github.com/go-widgets/isoicons v0.4.0/go.mod h1:jMuprd0v/uMcECg/kt6w5eYSaDJwuY8E1NtLfovGxAw=
+github.com/go-widgets/isoicons v0.4.1 h1:6N9SDz4kuB88BpnTkKUDavazUXTqyESuzYaFtqiToI0=
+github.com/go-widgets/isoicons v0.4.1/go.mod h1:8o8C69gD3wxxpcoV/5lHX+l2pQgKsWjTH4iCOwC1e60=
 github.com/go-widgets/mvvm v0.15.0 h1:VvZiLB7gm+5CIEeQH3GNI53ytUndzOznT/fJvaG8hOQ=
 github.com/go-widgets/mvvm v0.15.0/go.mod h1:ZJj5M8zDg/gdzcvdWnJgZj/fcV0qe84fALq+EQVzUOM=
 github.com/go-widgets/painter v0.17.0 h1:PB/Xr0flFR9qL2/RPhbJOeyU6PPzcGyf3Qx4RRngowg=
@@ -55,8 +55,8 @@ github.com/go-widgets/textinput v0.1.0 h1:ifx1RjbPIWtlokoBLV1ZwlH+0CeixoMbswlqhN
 github.com/go-widgets/textinput v0.1.0/go.mod h1:Y/k3PDtUEMQ/4psCVKdmUStNWa/EsVAMcCKG2lEtQ5c=
 github.com/go-widgets/toolkit v0.356.0 h1:perOh1Tcdw6VkxyaVmXvPHjt6lhsFchgIQjYgAXoGYc=
 github.com/go-widgets/toolkit v0.356.0/go.mod h1:dAs4uFSnRAV0aJ1IZkxQld5PP5ZdZDOS9bf9DF4jqQ8=
-github.com/go-widgets/webcanvas v0.7.0 h1:6+A1Hw9BBhBUmXEqceElUrc7M5HClVBpWBPEXBpkT2o=
-github.com/go-widgets/webcanvas v0.7.0/go.mod h1:GF9MyBmSlH/aNk4RjNwnC0LfAT3fng33EOSW7+r4LHs=
+github.com/go-widgets/webcanvas v0.8.0 h1:3F2rYnyRmrybzLCVyMR57hLrJ1anUvcSsX3RJ5h79eY=
+github.com/go-widgets/webcanvas v0.8.0/go.mod h1:GF9MyBmSlH/aNk4RjNwnC0LfAT3fng33EOSW7+r4LHs=
 github.com/go-widgets/window v0.90.0 h1:9tPy4AcLQ7z9Gvs+1ga1V6tW7Rm+DsN0YYcQby+Vqs8=
 github.com/go-widgets/window v0.90.0/go.mod h1:H5mryXV6RITsPxrlnBNK09FhMcXR4psVwJSn+KdxBf8=
 github.com/godbus/dbus/v5 v5.2.4 h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
