@@ -4,7 +4,11 @@
 
 package main
 
-import "github.com/go-widgets/webcanvas"
+import (
+	"github.com/go-widgets/painter"
+	"github.com/go-widgets/webcanvas"
+	"github.com/go-widgets/webcanvas/gpu"
+)
 
 // galleryApp adapts the gallery's *state to the shared [webcanvas.App]
 // interface, so the DOM harness in internal/webcanvas can drive it without any
@@ -27,6 +31,15 @@ func (g galleryApp) Size() (int, int) { return surfaceW, surfaceH }
 
 // Draw paints the whole gallery scene into buf.
 func (g galleryApp) Draw(buf []byte) { g.s.draw(buf) }
+
+// Paint paints the whole gallery scene through p: the background, then every
+// widget. It is what webcanvas/gpu records for the GPU; the frame equals
+// Draw's byte for byte (TestGalleryOnTheGPUPathIsPixelPainter records the
+// same calls).
+func (g galleryApp) Paint(p painter.Painter) {
+	p.FillRect(painter.Rect{W: g.s.w, H: g.s.h}, g.s.theme.Background)
+	g.s.paint(p)
+}
 
 // Click forwards a primary press.
 func (g galleryApp) Click(x, y int) bool { return g.s.handleClick(x, y) }
@@ -62,4 +75,5 @@ var (
 	_ webcanvas.App      = galleryApp{}
 	_ webcanvas.Ticker   = galleryApp{}
 	_ webcanvas.Scroller = galleryApp{}
+	_ gpu.Painted        = galleryApp{}
 )
