@@ -16,8 +16,13 @@
 
 package main
 
-import "github.com/go-widgets/webcanvas"
+import (
+	"github.com/go-widgets/webcanvas"
+	"github.com/go-widgets/webcanvas/gpu"
+)
 
+// main draws on the GPU through WebGPU where the browser has it, and on the
+// 2D canvas otherwise: webcanvas/gpu declines the canvas before touching it.
 func main() {
-	webcanvas.Run("screen", newGalleryApp())
+	webcanvas.RunWith("screen", newGalleryApp(), gpu.New())
 }
