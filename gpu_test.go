@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/go-gfx/gpu2d"
 	gpumetal "github.com/go-gfx/gpu2d/metal"
@@ -137,10 +138,16 @@ func benchMetal(b *testing.B, scale float64, pipelined bool) {
 	b.SetBytes(int64(4 * s.w * s.h))
 	b.ReportAllocs()
 	rec := newGPURec(l)
+	// Submit's own wall time, reported apart: a CPU profile on macOS can
+	// charge another thread's time to a goroutine blocked in a C call.
+	var inSubmit time.Duration
 	if pipelined {
 		rec.frame(s)
 		for b.Loop() {
-			if err := r.Submit(l); err != nil { // copies the list
+			t0 := time.Now()
+			err := r.Submit(l) // copies the list
+			inSubmit += time.Since(t0)
+			if err != nil {
 				b.Fatal(err)
 			}
 			rec.frame(s) // record N+1 while the GPU draws N
@@ -157,4 +164,7 @@ func benchMetal(b *testing.B, scale float64, pipelined bool) {
 		}
 	}
 	b.ReportMetric(float64(len(l.Instances())), "instances")
+	if pipelined {
+		b.ReportMetric(float64(inSubmit.Nanoseconds())/float64(b.N), "submit-ns/op")
+	}
 }
