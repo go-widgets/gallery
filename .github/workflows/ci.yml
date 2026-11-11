@@ -82,6 +82,11 @@ jobs:
 
       # Builds the real gallery for js/wasm, loads its page, and reads Chrome's
       # accessibility tree: the controls are named, the editor is one textbox.
+      # The runner image has Google Chrome. A test that skipped for want of it
+      # would pass here and prove nothing, so the job requires the PASS line.
       - name: Browser test
         working-directory: browsertest
-        run: go test -count=1 -v ./...
+        run: |
+          set -o pipefail
+          CHROME="$(command -v google-chrome)" go test -count=1 -v ./... | tee browser.log
+          grep -q -- '--- PASS: TestGalleryAXTreeShowsItsControls' browser.log
