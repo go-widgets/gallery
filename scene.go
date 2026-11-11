@@ -548,6 +548,7 @@ func newState(w, _ int) *state {
 
 	// --- Column B widgets — CONSTRUCTION ONLY (placement owned by colB) ---
 	s.textView = toolkit.NewTextView("Multi-line editor.\nType to insert.\nEnter splits a line.\nArrow keys navigate.")
+	s.textView.AccessibleName = "Multi-line editor"
 
 	s.calendar = toolkit.NewCalendar(2026, 7, 2)
 	s.calendar.SetToday(2026, 7, 2)

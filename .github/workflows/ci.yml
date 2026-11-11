@@ -64,3 +64,24 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go build -tags gallerynative -o /tmp/gallery-native .
+
+  browser:
+    name: Accessibility tree in headless Chrome
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.3"
+          check-latest: true
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            browsertest/go.sum
+
+      # Builds the real gallery for js/wasm, loads its page, and reads Chrome's
+      # accessibility tree: the controls are named, the editor is one textbox.
+      - name: Browser test
+        working-directory: browsertest
+        run: go test -count=1 -v ./...

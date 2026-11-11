@@ -23,6 +23,18 @@ SharedArrayBuffer, no COOP/COEP, no server-side dep. That makes it
 easy to iframe from any static host (`python3 -m http.server`, GitHub
 Pages, S3, ...).
 
+## Screen readers
+
+The page is readable by assistive technology. The dashboard's widget trees
+(menu bar, toolbar, columns, status bar) are published to
+[webcanvas](https://github.com/go-widgets/webcanvas)'s accessibility mirror
+through `go-widgets/window/webmirror`, the one toolkit-to-webcanvas conversion,
+and the multi-line editor gets webcanvas's text layer, so it is one named
+`textbox`. `browsertest/` is a module of its own that loads the real page in
+headless Chrome and reads `Accessibility.getFullAXTree`
+(`cd browsertest && go test ./...`; skipped without Chrome, `CHROME=` points at
+one).
+
 ## Native controls gallery
 
 The wasm page above shows the toolkit's **drawn** widgets. Its native
