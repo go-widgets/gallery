@@ -6,8 +6,10 @@ package main
 
 import (
 	"github.com/go-widgets/painter"
+	"github.com/go-widgets/textinput"
 	"github.com/go-widgets/webcanvas"
 	"github.com/go-widgets/webcanvas/gpu"
+	"github.com/go-widgets/window/webmirror"
 )
 
 // galleryApp adapts the gallery's *state to the shared [webcanvas.App]
@@ -69,6 +71,35 @@ func (g galleryApp) Scroll(x, y, dx, dy int) bool { return g.s.handleScroll(x, y
 // Tick advances the notification countdown one frame.
 func (g galleryApp) Tick() { g.s.tick() }
 
+// a11ySources are the dashboard's widget trees. The gallery draws a menu bar, a
+// toolbar, a theme switcher, three columns, a wide band and a status bar, each
+// its own tree, so each is published under its own prefix: every tree's own
+// keys begin "<Type>#0" and the three columns are all VBoxes.
+func (s *state) a11ySources() []webmirror.Source {
+	return []webmirror.Source{
+		{Prefix: "menubar", Root: s.menuBar},
+		{Prefix: "toolbar", Root: s.toolbar},
+		{Prefix: "theme", Root: s.themeSwitcher},
+		{Prefix: "colA", Root: s.colA},
+		{Prefix: "colB", Root: s.colB},
+		{Prefix: "colC", Root: s.colC},
+		{Prefix: "wide", Root: s.colWide},
+		{Prefix: "status", Root: s.status},
+	}
+}
+
+// A11yNodes is the dashboard as the accessibility mirror shows it. The
+// toolkit-to-webcanvas conversion is go-widgets/window/webmirror's, shared with
+// the browser-tab backend, not written again here.
+func (g galleryApp) A11yNodes() []webcanvas.A11yNode {
+	return webmirror.Host{Sources: g.s.a11ySources}.A11yNodes()
+}
+
+// TextInputFor gives the dashboard's multi-line editor its text layer.
+func (g galleryApp) TextInputFor(key string) textinput.Client {
+	return webmirror.Host{Sources: g.s.a11ySources}.TextInputFor(key)
+}
+
 // Compile-time proof the adapter satisfies every contract on the native build:
 // the base App, the Ticker (toast countdown) and the Scroller (wheel routing).
 var (
@@ -76,4 +107,7 @@ var (
 	_ webcanvas.Ticker   = galleryApp{}
 	_ webcanvas.Scroller = galleryApp{}
 	_ gpu.Painted        = galleryApp{}
+
+	_ webcanvas.A11yAware     = galleryApp{}
+	_ webcanvas.TextInputHost = galleryApp{}
 )
