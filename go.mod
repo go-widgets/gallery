@@ -5,24 +5,24 @@ go 1.27.3
 require (
 	github.com/go-crdt/crdt v0.57.0
 	github.com/go-gfx/gfx v0.41.0
-	github.com/go-gfx/gpu2d v0.11.0
-	github.com/go-macos/metal v0.6.0
+	github.com/go-gfx/gpu2d v0.12.1
+	github.com/go-macos/metal v0.7.0
 	github.com/go-widgets/gpupainter v0.4.0
-	github.com/go-widgets/isoicons v0.4.0
+	github.com/go-widgets/isoicons v0.4.1
 	github.com/go-widgets/mvvm v0.15.0
-	github.com/go-widgets/painter v0.17.0
+	github.com/go-widgets/painter v0.17.1
 	github.com/go-widgets/textinput v0.1.1
-	github.com/go-widgets/toolkit v0.370.0
-	github.com/go-widgets/webcanvas v0.14.1
+	github.com/go-widgets/toolkit v0.374.11
+	github.com/go-widgets/webcanvas v0.14.3
 	github.com/go-widgets/window v0.93.0
-	golang.org/x/image v0.47.0
+	golang.org/x/image v0.48.0
 )
 
 require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/ebitengine/purego v0.11.3 // indirect
 	github.com/go-freedesktop/x11 v0.3.0 // indirect
-	github.com/go-gfx/vulkan v0.2.1 // indirect
+	github.com/go-gfx/vulkan v0.3.0 // indirect
 	github.com/go-gfx/webgpu v0.15.0 // indirect
 	github.com/go-gtk/gtk4 v0.9.0 // indirect
 	github.com/go-icons/iconoir v0.3.0 // indirect
@@ -42,6 +42,6 @@ require (
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 )
